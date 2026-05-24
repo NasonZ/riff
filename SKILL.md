@@ -167,6 +167,8 @@ Narrow prompts + restricted toolsets outperform broad prompts. If the task is "i
 
 ### Background vs foreground
 
+MCP `codex` calls are synchronous from the driver's point of view: the tool call blocks until Codex finishes unless the harness itself supports background execution. For true parallelism over MCP, use the harness's background/run-in-background option if available; otherwise use the CLI fallback with `codex exec ... &`, capture the session ID immediately, and poll the output file. Backgrounding is an orchestration choice made by the caller, not something Codex can decide from inside the delegated task.
+
 - **Foreground** (default for short work): block on the codex call, read the output file, integrate. Good for anything under ~2 minutes.
 - **Background** (for long work, ~5min+): run `codex exec ... &` (or with the harness's background flag if available), capture the session ID immediately, continue your own work. Poll the output file or get notified on completion. Useful when the delegation is genuinely independent of your next steps. Don't background just because you can — only when there's parallel work that justifies the bookkeeping.
 
@@ -175,6 +177,8 @@ Narrow prompts + restricted toolsets outperform broad prompts. If the task is "i
 For independent sub-tasks (each in its own session), spawn 2–5 in parallel. **Above 5, synthesis overhead usually costs more than the parallelism saves.** Use file-handoff (see Transport B) with one directory per delegation so threads don't collide.
 
 ### Workflow
+
+For parallel implementation work, prefer a sibling git worktree on a feature branch: create the worktree, set Codex's `cwd` to that worktree, use `workspace-write` only for that directory, and keep the driver in the main worktree. This is now the normal 2026 pattern for independent agent work because file changes do not collide and the driver can review the diff before integration. With MCP delegation, `approval-policy=never` is reasonable only for trusted, tightly scoped work where the sandbox boundary is doing the safety work. The driver remains responsible for final review and commit.
 
 1. **Specify** — write the contract (goal/context/inputs/output/out-of-scope/verification).
 2. **Decide sandbox** — `read-only` for analysis; `workspace-write` only if Codex needs to write code, and tell the user first.
@@ -247,6 +251,10 @@ Use when: the topic is abstract or generative — design philosophy, "what's the
 4. **Transport:** use MCP `codex-reply(threadId, ...)` if available; else capture the session ID (Pattern A above) and use `codex exec resume -o <file> "$SID" "<prompt>"`. `--last` is risky in long debates because the chance of an unrelated thread starting grows.
 5. **Summarize for the user** in 3-5 sentences at the end. Never paste the full transcript.
 
+## Worked example — Independent-first then convergence
+
+Confirmed working pattern: use Independent-first for round 1 when you want unanchored critique, then use convergence mode with a schema gate once both positions are visible. In one hardening-design session, round 1 withheld the driver's analysis and Codex surfaced a broader structural issue the driver had missed; round 2 shared the driver's v1.5 position and Codex returned `CONSENSUS` plus concrete amendments. The useful signal came from the sequence: independent reframing first, structured convergence second. Do not skip straight to consensus when the real value may be in discovering that the question was framed too narrowly.
+
 ## Non-coding examples — when to reach for this skill
 
 The skill is not coding-only. Examples where Codex as a peer is valuable:
@@ -275,6 +283,8 @@ Minimum fields to populate (the rest are conditional — see schema):
 - `handoff.integrated_by_driver`
 - `outcome` (`accepted`/`reframed`/`retried`/`abandoned`)
 
+For write delegations, record the operational envelope: `cwd`, sandbox mode, approval policy, whether `cwd` is a linked git worktree, and who owns the final commit. These details are not bookkeeping; they explain failures like commit denial from sandboxed worktrees and make the handoff auditable later. If Codex cannot commit because of sandbox boundaries, mark the outcome as driver-integrated rather than failed.
+
 Trace skipping is acceptable for trivial cases (one-off "hi" smoke test) but **never** for a delegation whose output you'll integrate. If you can't fill `verification` honestly, you didn't verify — say so explicitly (`verifier: none`, `result: not_performed`) rather than fabricating.
 
 The eval suite at `~/.claude/skills/codex/evals/` validates traces against the schema and asserts case-specific invariants. See `evals/README.md` for run instructions.
@@ -296,3 +306,4 @@ Codex responses can be huge. Protect your context:
 - `error: unexpected argument '--sandbox' found` on `codex exec resume` → resume inherits sandbox from the original session and rejects `--sandbox`. Drop the flag.
 - `error: Found argument '...' which wasn't expected` on `codex exec resume <SID> <FLAGS> <PROMPT>` → resume's arg order is `[OPTIONS] [SESSION_ID] [PROMPT]`. Put flags before the SID.
 - `jq: command not found` → not all systems have `jq`. Use the `python3 -c` snippet in Pattern A instead.
+- `git commit` fails inside a delegated worktree under `workspace-write` → a linked worktree's `.git` is a file pointing to `../parent/.git/worktrees/<name>/`, which is outside the sandbox write roots. Treat this as expected sandbox behavior, not a Codex git bug. Preferred fixes: the driver reviews and commits from the parent repo, or Codex emits a patch for the driver to apply. Do not widen the sandbox to the parent `.git` unless the user explicitly accepts weakening the isolation boundary.
