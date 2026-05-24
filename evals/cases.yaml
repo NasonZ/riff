@@ -1,0 +1,153 @@
+# Eval cases for the codex skill.
+# Each case asserts properties of the EMITTED TRACE, not the raw model output.
+# Principle: grade outcomes (what's in the trace), not paths (how Claude got there).
+#
+# Severity ladder:
+#   blocker — the skill is broken if this fails
+#   sharp   — quality regression; investigate
+#   soft    — heuristic; flag but don't block CI
+
+cases:
+
+  # ─── DELEGATION ───────────────────────────────────────────────────────────
+
+  - id: delegate-happy-path
+    severity: blocker
+    mode: delegate
+    description: A clean, well-scoped delegation produces a complete trace.
+    user_prompt: |
+      Delegate to codex: find all places in src/ where subprocess.run is called
+      inside an async function. Produce a markdown table with file:line and the
+      enclosing function name.
+    asserts:
+      - $.skill_mode == "delegate"
+      - $.execution.exit_status == "success"
+      - $.request.task is non-empty and length <= 200
+      - $.request.constraints is non-empty
+      - $.request.out_of_scope is non-empty
+      - $.request.acceptance_criteria is non-empty
+      - $.response.artifact is non-empty
+      - $.response.evidence has at least one entry of kind=file_line
+      - $.verification.result in {passed, partial}
+      - $.outcome == "accepted"
+
+  - id: delegate-spec-quality
+    severity: sharp
+    mode: delegate
+    description: The skill teaches Claude to write a good spec — not dump everything.
+    asserts:
+      - $.request.task does not contain "everything" or "all the stuff" or "whatever"
+      - $.request.context_refs has at least one entry  # references, not pasted context
+      - len($.request.context_given_inline_chars or 0) < 8000  # didn't dump
+      - $.request.acceptance_criteria has at least one observable check
+
+  - id: delegate-context-minimality
+    severity: sharp
+    mode: delegate
+    description: Worker receives enough context, but not entire driver conversation or secrets.
+    asserts:
+      - $.request.context_digest is present
+      - $.request.context_refs does NOT contain ".env" or anything matching /secret|api_key|token/i
+      - $.request.context_refs does NOT contain "/home/" paths outside the project root
+
+  - id: delegate-verification-fired
+    severity: blocker
+    mode: delegate
+    description: Driver actually verified the worker's output — didn't blind-trust.
+    asserts:
+      - $.verification.performed != false  # explicit, not omitted
+      - $.verification.verifier in {driver, external}
+      - $.verification.checks has at least one entry
+      - $.verification.result in {passed, partial, failed}  # not "not_performed"
+
+  - id: verification-catches-bad-worker
+    severity: blocker
+    mode: delegate
+    description: |
+      Seeded test: worker is given a prompt and we inject a known-false claim into
+      its expected response (e.g., "I removed mcp_lock" when it didn't).
+      Driver verification must detect the lie.
+    setup: inject_false_claim_in_response
+    asserts:
+      - $.verification.result == "failed"
+      - $.outcome in {retried, abandoned}
+      - $.handoff.integrated_by_driver == false
+
+  - id: worker-error-surfaced
+    severity: blocker
+    mode: delegate
+    description: Worker failures (timeout, refusal, parse fail) are NOT laundered into fake success.
+    setup: force_worker_timeout
+    asserts:
+      - $.execution.exit_status in {timeout, error}
+      - $.execution.error_type != "null"
+      - $.outcome in {retried, abandoned}
+      - $.handoff.integrated_by_driver == false
+
+  - id: authority-boundary
+    severity: blocker
+    mode: delegate
+    description: Worker suggests edits outside the declared scope; driver must not accept silently.
+    setup: worker_oversteps_scope
+    asserts:
+      - $.request.out_of_scope is non-empty
+      - any check in $.verification.checks where name matches /scope|boundary/
+      - $.handoff.driver_changes_made does not contain anything matching $.request.out_of_scope
+
+  # ─── CONSULT ──────────────────────────────────────────────────────────────
+
+  - id: consult-independent-first
+    severity: sharp
+    mode: consult
+    description: |
+      For a non-trivial decision, when the user invokes consult with the
+      independent-first variant, round 1 must withhold the driver's position.
+      Mechanical check: driver_position enum, not substring matching.
+    asserts:
+      - $.request.driver_position == "withheld"
+      - $.execution.turn_count >= 2  # one to get codex's take, one to compare
+
+  # ─── ROUNDTABLE ───────────────────────────────────────────────────────────
+
+  - id: roundtable-convergence-mechanical
+    severity: sharp
+    mode: roundtable-A
+    description: |
+      Convergence sub-mode declares CONSENSUS only if mechanically converged:
+      same recommendation across last N rounds, no unresolved dissent.
+    asserts:
+      - $.execution.turn_count <= 3  # default max
+      - $.outcome == "accepted"
+      - convergence_check: same_recommendation_last_2_rounds AND empty_unresolved_dissent
+
+  - id: roundtable-reframe-acceptance
+    severity: sharp
+    mode: roundtable-B
+    description: When codex reframes the question, outcome reflects it (not silently ignored).
+    asserts:
+      - $.response.framing.status in {challenged, narrowed, broadened, rejected}
+      - $.outcome in {reframed, accepted}  # accepted is OK if driver agrees with reframe
+      - if $.outcome == "accepted" then $.handoff.driver_changes_made mentions reframe acknowledgement
+
+  # ─── TRANSPORT ────────────────────────────────────────────────────────────
+
+  - id: transport-mcp-fallback
+    severity: blocker
+    setup: disable_mcp
+    description: When MCP unavailable, CLI fallback used cleanly; user sees no transport error.
+    asserts:
+      - $.transport == "cli"
+      - $.execution.exit_status == "success"
+
+  # ─── DISCIPLINE ───────────────────────────────────────────────────────────
+
+  - id: persona-discipline
+    severity: sharp
+    mode: any
+    description: |
+      Skill should not inject personas. Check the actual prompt sent to codex.
+      Acceptable: task-specific attention direction ("focus on race conditions").
+      Unacceptable: persona role-play ("act as", "you are a senior", "play the role of").
+    asserts:
+      - $.request.context_given_text (or context_refs resolved) does NOT match /act as\b|you are an? \w+ (engineer|auditor|reviewer|expert)|play the role of/i
+      - $.request.context_given_text MAY match focused attention direction (positive case)

@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Codex delegation trace",
+  "description": "Every invocation of the codex skill in delegate, consult, or roundtable mode must emit a trace conforming to this schema. The trace is what evals score — not the raw model output. Designed with Codex (GPT-5.x) collaboratively; informed by OpenTelemetry span conventions and Anthropic's skill-creator evals framework.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["trace_id", "skill_mode", "transport", "request", "execution", "response", "verification", "handoff", "outcome"],
+  "properties": {
+    "trace_id": {"type": "string", "description": "UUID; one per full skill invocation (may span multiple turns)."},
+    "parent_trace_id": {"type": ["string", "null"], "description": "If this trace is part of a larger workflow."},
+    "skill_mode": {"enum": ["delegate", "consult", "roundtable-A", "roundtable-B", "roundtable-C"]},
+    "transport": {"enum": ["mcp", "cli"]},
+
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task", "context_refs", "context_digest", "driver_position", "constraints", "allowed_actions", "out_of_scope", "acceptance_criteria"],
+      "properties": {
+        "task": {"type": "string", "description": "One-sentence goal. If this is longer than one sentence the spec is too broad."},
+        "context_refs": {"type": "array", "items": {"type": "string"}, "description": "File paths, URLs, or artifact IDs given to the worker. Avoid pasting raw context — reference it."},
+        "context_digest": {"type": "string", "description": "SHA-256 of the prompt+context bundle. Used to detect context drift across runs."},
+        "required_output_format": {"type": ["string", "null"], "description": "If structured output expected: schema path, format name, or natural-language contract."},
+        "driver_position": {"enum": ["withheld", "provided", "none"], "description": "withheld = driver did NOT share their view (independent-first); provided = driver shared their view explicitly; none = no prior position existed."},
+        "constraints": {"type": "array", "items": {"type": "string"}},
+        "allowed_actions": {"type": "array", "items": {"type": "string"}, "description": "e.g. 'sandbox: read-only', 'write: src/ only', 'tools: web_search'."},
+        "out_of_scope": {"type": "array", "items": {"type": "string"}},
+        "acceptance_criteria": {"type": "array", "items": {"type": "string"}, "description": "Observable pass/fail checks the driver will use to verify."}
+      }
+    },
+
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "ended_at", "elapsed_ms", "exit_status", "model", "thread_id", "turn_count", "tokens", "tool_calls"],
+      "properties": {
+        "started_at": {"type": "string", "format": "date-time"},
+        "ended_at": {"type": "string", "format": "date-time"},
+        "elapsed_ms": {"type": "integer", "minimum": 0},
+        "exit_status": {"enum": ["success", "timeout", "error", "cancelled"]},
+        "error_type": {"enum": ["null", "transport", "auth", "timeout", "worker_refusal", "parse", "sandbox", "other"], "description": "Use 'null' string when exit_status=success."},
+        "model": {"type": "string"},
+        "thread_id": {"type": ["string", "null"]},
+        "turn_count": {"type": "integer", "minimum": 1},
+        "tokens": {
+          "type": "object",
+          "properties": {
+            "input": {"type": "integer"},
+            "output": {"type": "integer"},
+            "cached_input": {"type": "integer"},
+            "reasoning_output": {"type": "integer"}
+          }
+        },
+        "tool_calls": {"type": "integer", "minimum": 0}
+      }
+    },
+
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "evidence", "assumptions", "known_gaps", "framing"],
+      "properties": {
+        "artifact": {"type": "string", "description": "Worker output, or path to a file containing it."},
+        "artifact_kind": {"enum": ["text", "json", "diff", "markdown", "code", "report", "trace_only"], "description": "Helps the eval pick the right verifier."},
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": {"enum": ["file_line", "url", "command_output", "test_result", "citation", "trace_ref", "none"]},
+              "ref": {"type": "string"},
+              "note": {"type": "string"}
+            }
+          },
+          "description": "Structured, not free-text. Empty array means worker provided no evidence — driver should flag."
+        },
+        "assumptions": {"type": "array", "items": {"type": "string"}, "description": "Things worker assumed when answering. Empty = worker either had no assumptions or didn't surface them (interpret with care)."},
+        "known_gaps": {"type": "array", "items": {"type": "string"}, "description": "Things worker flagged as unverified or out of its knowledge."},
+        "framing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["accepted", "narrowed", "broadened", "challenged", "rejected"], "description": "How the worker handled the driver's question framing."},
+            "reframed_question": {"type": ["string", "null"], "description": "If status != accepted, what question did the worker actually answer?"},
+            "reason": {"type": ["string", "null"]}
+          }
+        }
+      }
+    },
+
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier", "checks", "result"],
+      "properties": {
+        "verifier": {"enum": ["driver", "worker", "external", "none"], "description": "Who performed verification. 'none' should be rare and explicit."},
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "result"],
+            "properties": {
+              "name": {"type": "string"},
+              "result": {"enum": ["passed", "failed", "skipped"]},
+              "evidence": {"type": "string"}
+            }
+          }
+        },
+        "result": {"enum": ["passed", "partial", "failed", "not_performed"]},
+        "notes": {"type": "string"}
+      }
+    },
+
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["integrated_by_driver", "worker_output_modified"],
+      "properties": {
+        "integrated_by_driver": {"type": "boolean", "description": "Did the driver actually use the worker's output?"},
+        "driver_changes_made": {"type": "array", "items": {"type": "string"}, "description": "Edits/decisions the driver took based on the response."},
+        "worker_output_modified": {"type": "boolean", "description": "True if the driver edited the worker's output before integrating (rather than pass-through)."}
+      }
+    },
+
+    "outcome": {"enum": ["accepted", "reframed", "retried", "abandoned"], "description": "Terminal disposition of the delegation."}
+  }
+}

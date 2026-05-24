@@ -1,0 +1,76 @@
+# Description-precision tests for the codex skill.
+# Tests whether the skill description triggers (or doesn't) on representative user prompts.
+#
+# Methodology (per Codex's critique): LLM-as-judge has bias risk. Mitigate by:
+#   1. Multi-judge: run each prompt through ≥2 judges (Claude + Codex), require agreement
+#   2. Multi-seed: 3 runs per judge to detect non-determinism
+#   3. Report Wilson 95% confidence intervals on pass rates, not single pass/fail
+#   4. Include ADVERSARIAL NEGATIVES — prompts that mention "codex"/"delegate"/"second opinion"
+#      conversationally where skill should NOT fire.
+#
+# Manual review remains the final word on edge cases.
+
+should_fire:
+  - id: explicit-delegate
+    prompt: "Delegate this analysis to codex — find all the places we shadow user_id."
+    rationale: Explicit delegate request to named second model.
+
+  - id: second-opinion-named
+    prompt: "Get a second opinion from another model on this fix before I commit."
+    rationale: Named second-opinion intent.
+
+  - id: roundtable-debate
+    prompt: "Let's have two agents debate whether we should use Postgres or DynamoDB here."
+    rationale: Roundtable intent, explicit multi-agent.
+
+  - id: gpt5-request
+    prompt: "Ask GPT-5 if my reasoning here is sound."
+    rationale: Names the other model directly.
+
+  - id: independent-check
+    prompt: "I want an independent take on this design — can codex weigh in?"
+    rationale: Independent-first consult intent.
+
+  - id: codex-rescue
+    prompt: "I'm stuck on this bug for an hour. Bring in codex for a fresh perspective."
+    rationale: Rescue / fresh-perspective delegation.
+
+should_not_fire:
+  - id: solo-code-review
+    prompt: "Review this code for bugs."
+    rationale: Could be solo. User didn't ask for second model.
+
+  - id: solo-write-function
+    prompt: "Write me a function that parses ISO 8601 timestamps."
+    rationale: Single-model generation task.
+
+  - id: solo-explain
+    prompt: "Explain what this regex does."
+    rationale: Single-model explanation.
+
+  - id: solo-refactor
+    prompt: "Refactor server.py to use async."
+    rationale: Single-model implementation work.
+
+  # ADVERSARIAL NEGATIVES — these MENTION codex/delegate/etc. but shouldn't trigger.
+  - id: adversarial-codex-conversational
+    prompt: "I was reading the openai codex CLI docs earlier — interesting that they support --search."
+    rationale: Mentions codex conversationally; no delegation intent.
+
+  - id: adversarial-delegate-task
+    prompt: "I need to delegate the deploy task to someone on the team next week."
+    rationale: "Delegate" refers to humans, not models.
+
+  - id: adversarial-second-opinion-non-model
+    prompt: "Should I get a second opinion from a contractor before shipping this?"
+    rationale: Second opinion from a human, not another LLM.
+
+  - id: adversarial-debate-philosophy
+    prompt: "There's a debate in the team about whether to use REST or gRPC."
+    rationale: Mentions "debate" but about humans, not two-agent deliberation.
+
+# Reporting format:
+#   pass_rate: float (point estimate)
+#   ci_low / ci_high: Wilson 95% confidence interval bounds
+#   per_judge: {claude: {...}, codex: {...}}
+#   disagreements: list of cases where judges differed (these need manual review)
