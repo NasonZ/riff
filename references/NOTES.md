@@ -1,6 +1,6 @@
 # Codex skill — build notes
 
-These notes preserve the build log for riff: what I (Nason) asked for, what Claude Code drafted, where Codex pushed back, and what changed as a result. Companion to `./DESIGN.md` (the reference) and `../SKILL.md` (the operational guidance to Claude).
+These notes preserve the build log for riff: what I asked for, what Claude Code drafted, where Codex pushed back, and what changed as a result. Companion to `./DESIGN.md` (the reference) and `../SKILL.md` (the operational guidance to Claude).
 
 Longer than DESIGN.md because the design changed several times based on what didn't work, and the record of what didn't work matters — both for me and for anyone building similar cross-model skills.
 
