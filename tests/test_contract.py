@@ -130,11 +130,9 @@ class RunRequestTests(unittest.TestCase):
                 )
             )
 
-    def test_provided_position_requires_text(self) -> None:
+    def test_provided_position_requires_text_and_is_not_independent(self) -> None:
         with self.assertRaisesRegex(ValidationError, "driver_position_text"):
             RunRequest.from_dict(self.request(driver_position="provided"))
-
-    def test_provided_position_turns_off_independent_first(self) -> None:
         parsed = RunRequest.from_dict(
             self.request(driver_position="provided", driver_position_text="Use B.")
         )
@@ -145,16 +143,6 @@ class RunRequestTests(unittest.TestCase):
                     driver_position="provided",
                     driver_position_text="Use B.",
                     coordination={"independent_first": True},
-                )
-            )
-
-    def test_participant_timeout_points_to_the_request_field(self) -> None:
-        with self.assertRaisesRegex(ValidationError, "timeout_seconds is a request-level field"):
-            RunRequest.from_dict(
-                self.request(
-                    participants=[
-                        {"id": "pi-a", "harness": "pi", "cwd": self.cwd, "timeout_seconds": 60}
-                    ]
                 )
             )
 
@@ -184,6 +172,17 @@ class RunRequestTests(unittest.TestCase):
                             "cwd": self.cwd,
                             "profile": "hidden-magic",
                         }
+                    ]
+                )
+            )
+
+        # A misplaced field names where it belongs: a driver that deleted it instead
+        # inherited the default timeout and lost a turn.
+        with self.assertRaisesRegex(ValidationError, "timeout_seconds is a request-level field"):
+            RunRequest.from_dict(
+                self.request(
+                    participants=[
+                        {"id": "pi-a", "harness": "pi", "cwd": self.cwd, "timeout_seconds": 60}
                     ]
                 )
             )
@@ -227,94 +226,86 @@ class RequestWarningTests(unittest.TestCase):
         value.update(updates)
         return [warning["code"] for warning in request_warnings(RunRequest.from_dict(value))]
 
-    def test_well_formed_consult_has_no_warnings(self) -> None:
-        self.assertEqual(self.codes(), [])
-
-    def test_delegate_without_contract_is_flagged(self) -> None:
-        self.assertEqual(
-            self.codes(mode="delegate", task="Refactor the parser."),
-            ["delegate-without-acceptance-criteria", "delegate-without-out-of-scope"],
-        )
-        self.assertEqual(
-            self.codes(
-                mode="delegate",
-                task="Refactor the parser.",
-                acceptance_criteria=["python -m unittest passes"],
-                out_of_scope=["Do not change the public API"],
+    def test_each_lint_fires_on_its_pattern_and_clears_with_its_remedy(self) -> None:
+        pis = [{"id": f"pi-{index}", "harness": "pi", "cwd": self.cwd} for index in range(6)]
+        web_task = "Verify the cited URLs in docs/design.md support its claims."
+        cases = [
+            # (lint, request that triggers it, the same request after its remedy)
+            (
+                "delegate-without-acceptance-criteria",
+                {"mode": "delegate", "out_of_scope": ["No API changes"]},
+                {"mode": "delegate", "out_of_scope": ["No API changes"],
+                 "acceptance_criteria": ["unittest passes"]},
             ),
-            [],
-        )
-
-    def test_persona_wording_is_flagged_but_focused_attention_is_not(self) -> None:
-        self.assertIn("persona-cue", self.codes(task="Act as Aristotle and judge this plan."))
-        self.assertIn(
-            "persona-cue", self.codes(task="You are a world-class engineer. Review this.")
-        )
-        self.assertNotIn(
-            "persona-cue", self.codes(task="Check specifically for lost-update races.")
-        )
-
-    def test_driver_view_inside_a_withheld_task_is_flagged(self) -> None:
-        self.assertIn(
-            "position-in-withheld-task",
-            self.codes(task="I think option B is right. Which option is best?"),
-        )
-        self.assertNotIn(
-            "position-in-withheld-task",
-            self.codes(
-                task="I think option B is right. Critique that.",
-                driver_position="provided",
-                driver_position_text="Option B, because it keeps one writer.",
+            (
+                "delegate-without-out-of-scope",
+                {"mode": "delegate", "acceptance_criteria": ["unittest passes"]},
+                {"mode": "delegate", "acceptance_criteria": ["unittest passes"],
+                 "out_of_scope": ["No API changes"]},
             ),
-        )
+            (
+                "persona-cue",
+                {"task": "You are a world-class engineer. Review this."},
+                {"task": "Check specifically for lost-update races."},
+            ),
+            (
+                "position-in-withheld-task",
+                {"task": "I think option B is right. Which option is best?"},
+                {"task": "I think option B is right. Critique that.",
+                 "driver_position": "provided", "driver_position_text": "Option B."},
+            ),
+            ("no-driver-prediction", {"driver_prediction": None}, {}),
+            (
+                "scope-lacks-web",
+                {"task": web_task},
+                {"task": web_task, "participants": [
+                    {"id": "claude-w", "harness": "claude", "cwd": self.cwd, "tools": "read+web"}]},
+            ),
+            (
+                "wide-fan-out",
+                {"participants": pis, "coordination": {"dispatch": "broadcast"}},
+                {"participants": pis[:5], "coordination": {"dispatch": "broadcast"}},
+            ),
+        ]
+        self.assertEqual(self.codes(), [], "the well-formed base request must be clean")
+        for code, triggering, remedied in cases:
+            with self.subTest(code):
+                self.assertIn(code, self.codes(**triggering))
+                self.assertNotIn(code, self.codes(**remedied))
 
-    def test_independent_first_run_asks_for_a_prediction(self) -> None:
-        self.assertIn("no-driver-prediction", self.codes(driver_prediction=None))
-
-    def test_claude_context_ref_outside_cwd_is_flagged_unless_added(self) -> None:
+    def test_filesystem_lints_follow_what_the_peer_can_actually_reach(self) -> None:
         outside = Path(self.cwd).parent / f"{Path(self.cwd).name}-shared"
         outside.mkdir()
         self.addCleanup(outside.rmdir)
-        reference = str(outside / "spec.md")
         claude = {"id": "claude-a", "harness": "claude", "cwd": self.cwd, "tools": "read"}
-        self.assertIn(
-            "context-ref-outside-cwd",
-            self.codes(participants=[claude], context_refs=[reference]),
-        )
+        for reference in (str(outside / "spec.md"), f"../{outside.name}/spec.md"):
+            with self.subTest(reference):
+                self.assertIn(
+                    "context-ref-outside-cwd",
+                    self.codes(participants=[claude], context_refs=[reference]),
+                )
+                self.assertNotIn(
+                    "context-ref-outside-cwd",
+                    self.codes(
+                        participants=[claude | {"params": {"add_dirs": [str(outside)]}}],
+                        context_refs=[reference],
+                    ),
+                )
         self.assertNotIn(
             "context-ref-outside-cwd",
-            self.codes(
-                participants=[claude | {"params": {"add_dirs": [str(outside)]}}],
-                context_refs=[reference],
-            ),
+            self.codes(participants=[claude], context_refs=["docs/design.md"]),
         )
 
-    def test_write_peer_in_a_main_checkout_is_flagged(self) -> None:
         (Path(self.cwd) / ".git").mkdir()
         writer = {"id": "codex-w", "harness": "codex", "cwd": self.cwd, "tools": "write"}
-        codes = self.codes(
-            mode="delegate",
-            participants=[writer],
-            acceptance_criteria=["tests pass"],
-            out_of_scope=["no API changes"],
+        contract = {"acceptance_criteria": ["tests pass"], "out_of_scope": ["no API changes"]}
+        self.assertEqual(
+            self.codes(mode="delegate", participants=[writer], **contract),
+            ["write-in-main-checkout"],
         )
-        self.assertEqual(codes, ["write-in-main-checkout"])
-
-    def test_web_verification_task_without_web_scope_is_flagged(self) -> None:
-        task = "Verify the cited URLs in docs/design.md support its claims."
-        self.assertIn("scope-lacks-web", self.codes(task=task))
-        web_peer = {"id": "claude-w", "harness": "claude", "cwd": self.cwd, "tools": "read+web"}
-        self.assertNotIn("scope-lacks-web", self.codes(task=task, participants=[web_peer]))
-
-    def test_wide_fan_out_is_flagged(self) -> None:
-        participants = [
-            {"id": f"pi-{index}", "harness": "pi", "cwd": self.cwd} for index in range(6)
-        ]
-        self.assertIn(
-            "wide-fan-out",
-            self.codes(participants=participants, coordination={"dispatch": "broadcast"}),
-        )
-
+        (Path(self.cwd) / ".git").rmdir()
+        (Path(self.cwd) / ".git").write_text("gitdir: /elsewhere/.git/worktrees/w\n")
+        self.assertEqual(self.codes(mode="delegate", participants=[writer], **contract), [])
 
 if __name__ == "__main__":
     unittest.main()

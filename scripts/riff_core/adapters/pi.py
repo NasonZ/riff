@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 import selectors
-import signal
 import shutil
+import signal
 import subprocess
 import time
 import uuid
@@ -23,7 +23,6 @@ from .base import (
     require_string_param,
     require_supported_params,
 )
-
 
 READ_TOOLS = "read,grep,find,ls"
 

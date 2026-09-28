@@ -32,8 +32,19 @@ The coordinator owns fragile mechanics:
 - explicit native session identity;
 - fan-out and pipeline ordering;
 - artifact and log paths;
-- recursive-invocation prevention; and
-- automatic run and turn records.
+- recursive-invocation prevention;
+- request linting and executed verification; and
+- automatic run and turn records, including the driver's next steps.
+
+That last item matters more than it looks. A driver can lose the skill's text to
+context compaction mid-session; the coordinator's output is the one instruction
+surface it reads on every call, so obligations that must survive (read the
+artifact, verify, report denied access) travel there. They are derived from the run
+itself rather than generic: a delegation asks for acceptance checks and an
+integration record, a consult asks for the claims checked and whether the driver's
+recorded prediction changed (quoting it back), a failure names its recovery, and a
+run where no peer answered asks for an honest `not_performed`. An inspection or exploratory contribution needs a different
+record from an executable acceptance check.
 
 Adapters compile the common contract into native harness operations. Riff does not
 become another model provider registry, tool runtime, sandbox, or agent framework.
@@ -159,9 +170,14 @@ runs/<run-id>/
 └── logs/<turn-id>.log
 ```
 
-`run.json` stores coordination metadata, task digest, references, status, and driver
-verification. It does not duplicate full prompts or artifacts. Turn records store a
-prompt digest, artifact path/hash, native session handle, timing, usage, and error.
+`run.json` stores coordination metadata, a task digest, references, contract fields,
+the driver's prediction, lint warnings, a git fingerprint of each participant's
+checkout at dispatch, status, and verification with its history. It does not
+duplicate full prompts or artifacts. Turn records store a prompt digest, artifact
+path and hash, native session handle, timing, usage, cost where the harness reports
+it, permission denials, the checkout fingerprint at settle, and error. Comparing the
+two fingerprints tells a reader whether files moved while the peer was reading
+them.
 
 The coordinator emits records automatically. The driver only appends verification
 and integration truth; an empty, explicit `not_performed` is preferable to a
@@ -174,10 +190,12 @@ honestly labelled, never presented as executed (`RIF-DELEGATE-002`).
 
 `validate` and `run` also return lint warnings for valid requests that tend to
 waste or bias a run: a delegation without acceptance criteria or out-of-scope
-items, persona wording, the driver's view inside a withheld task, an
-independent-first run without a `driver_prediction`, and fan-out beyond five
-participants. They warn rather than reject because each pattern has honest false
-positives. `driver_prediction` is stored in the manifest and never sent to a peer;
+items; persona wording; the driver's view inside a withheld task; an
+independent-first run without a `driver_prediction`; a task that needs the web
+given a scope without it; a context file a Claude peer cannot read; a write peer in
+a main checkout rather than a worktree; and fan-out beyond five participants.
+These heuristics warn rather than reject because each pattern has legitimate
+exceptions, and every message names its remedy. `driver_prediction` is stored in the manifest and never sent to a peer;
 with `verify --view-changed` it makes "did consulting change the decision?" a
 recorded fact rather than a recollection (`RIF-EPISTEMIC-003`).
 
@@ -185,15 +203,23 @@ An initial `run` returns both the aggregate run result and the result of the tur
 it just executed; these are identical on round one. A later `reply` keeps them
 separate: `turn_result` describes that reply, while `result` is recomputed across
 the latest state of every participant. A successful follow-up therefore cannot
-launder another participant's failure into overall success.
+launder another participant's failure into overall success. Only settled turns
+spend a participant's `max_rounds`; a failed turn being recovered does not, and
+attempts are capped at twice the budget so a broken peer cannot loop.
 
 For Pi, `progress` can inspect the RPC stream log and native JSONL while a turn is
 active. Its default view exposes operational metadata—event/update counts, block
 types, character counts, and tool names—without copying thinking or answer text
 into coordinator output. The RPC log supplies low-latency deltas; the session JSONL
 supplies durable continuation records and may lag until an assistant/tool boundary.
-Short content previews require an explicit flag. Preallocated run UUIDs make the
-run addressable from a second shell before the blocking `run` command settles.
+Short content previews require an explicit flag. `run` prints its run ID on stderr
+before it blocks, so the run is addressable from a second shell at once; a
+preallocated `--run-id` remains available for callers that want to choose it.
+`run --detach` starts the coordinator in its own process group and returns at once,
+and `wait` blocks for a bounded time (nine minutes by default) before returning
+either the settled result or "still running". A child backgrounded by a driver's
+tool can otherwise die when the driver session ends. Choose wait bounds within
+the calling harness's per-call limit.
 
 Participant mutations use per-participant advisory locks, run aggregates use a run
 lock, and JSON state is written through unique fsynced temporary files followed by
@@ -207,9 +233,11 @@ Tool scope has four shared values: `none`, `read`, `read+web`, and `write`.
 URL fetch); it grants no write, shell, or edit authority. Adapters report
 whether the scope is native, sandboxed, or prompt-enforced, and each adapter
 supports only the scopes it can enforce natively — unsupported scopes fail
-closed at command construction (as of this writing only Claude Code supports
-`read+web`, via `WebSearch`/`WebFetch` in its `--tools` allowlist). Riff does
-not imply authority from a mode name.
+closed at command construction. As of this writing only Claude Code supports
+`read+web`, which needs both halves of its permission model: `--tools` to expose
+WebSearch and WebFetch, and `--allowedTools` to pre-approve them under the
+non-interactive permission mode. Exposure alone looks correct and fails silently;
+see `HARNESSES.md`. Riff does not imply authority from a mode name.
 
 The contract rejects:
 

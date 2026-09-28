@@ -66,9 +66,11 @@ python3 "$RIFF_ROOT/scripts/riff.py" run --request request.json
 ```
 
 Fix what `validate` warns about before an expensive run; each warning names the
-remedy. `run` prints a `started` line with the run ID on stderr before it blocks,
-and its final JSON carries `next_steps` — follow them even if these instructions are
-no longer in your context.
+remedy. `run` blocks until every peer settles, which can take many minutes, then
+returns JSON whose `next_steps` you should follow even if these instructions are no
+longer in your context. If your shell limits how long one call may run, start with
+`run --detach` and follow with `wait --run-id <id>`, which returns within about nine
+minutes; call it again while it reports `running`.
 
 ```json
 {
@@ -81,11 +83,10 @@ no longer in your context.
      "params": {"reasoning_effort": "high"}}
   ],
   "driver_position": "withheld",
-  "driver_prediction": "The cache invalidation path; a peer finding a deeper issue would change the plan.",
+  "driver_prediction": "Expect the cache invalidation path. A deeper structural flaw would change the plan.",
   "context_refs": ["docs/design.md"],
   "acceptance_criteria": ["Cite file:line for each concern"],
-  "out_of_scope": ["Do not propose a rewrite of the storage layer"],
-  "timeout_seconds": 1800
+  "out_of_scope": ["Do not propose a rewrite of the storage layer"]
 }
 ```
 
@@ -116,8 +117,9 @@ run. If you cannot write the acceptance criteria, consult first. Use `single`,
 `split` (a distinct `participant.task` each), `pipeline` (a declared artifact feeds
 the next stage), or `broadcast` for read-only alternatives only.
 
-Writers work in a linked git worktree, never the main checkout, so you can review
-the diff before integrating; concurrent writers need distinct worktrees. Let a
+Put each writer in its own linked git worktree, not the main checkout, so you can
+review its diff before integrating and your own edits cannot be swept into its
+commit. Let a
 Claude write peer run tests with `params.allowed_commands` (for example
 `["uv run pytest"]`); without it the shell is denied. Riff never grants commit,
 push, PR, messaging, or deployment authority implicitly.
@@ -134,9 +136,12 @@ python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
 
 `--run` commands are executed and their exit codes recorded; the result is derived
 from them, and a claimed `passed` that contradicts a failing command is rejected.
-`--check` records something you inspected as asserted, never as executed. Use
-`--result not_performed` when you checked nothing, and `--integrated` only after
-you actually changed files. Re-verifying keeps the earlier record.
+`--check` records something you inspected as asserted, never as executed; for a
+consult, reading the peer's claims against the code or the cited sources is a real
+check, so record it rather than skipping the record because there was no test. Use
+`--result not_performed` when you checked nothing, and `--integrated` only once you
+have actually applied the result (changed files, adopted the decision). Re-verifying
+keeps the earlier record.
 
 Report to the user in this shape, not as pasted peer output or a vote count:
 
@@ -154,7 +159,8 @@ Judgment: <yours>
 
 - **A timeout is not a lost session.** Reply to the same participant with a short
   "write your final answer now"; a surviving native session may remain recoverable, and a
-  failed turn does not spend a round. Set `timeout_seconds` for long delegations.
+  failed turn does not spend a round. The default turn timeout is 30 minutes; raise
+  `timeout_seconds` for long delegations.
 - **Usage-limit and auth failures do not heal on retry.** `error_type` `rate_limit`
   states the reset time; `auth` means fix credentials or pick another peer. Tell
   the user; never substitute your own review under the peer's name.
@@ -166,5 +172,7 @@ Judgment: <yours>
 - **An older overlapping skill** (for example a legacy `codex` skill) can capture
   the trigger before Riff loads; see `README.md` for migration.
 - **A sandboxed Codex cannot commit from a linked worktree**; the driver commits.
-- **Background runs:** redirect output to a file; piping to `tail` can kill the
-  child with SIGPIPE when the invoking shell exits.
+- **A backgrounded run can die with your session.** The calling harness may
+  terminate child processes when its session ends. Use `run --detach` plus `wait`: the detached run
+  survives, and `wait` picks it up. Never pipe riff output to `tail`; SIGPIPE can
+  kill it when the invoking shell exits.

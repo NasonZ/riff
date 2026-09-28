@@ -7,8 +7,8 @@ several peers, or a delegation whose result will be integrated.
 ## Contents
 
 - [Peer stance](#peer-stance)
-- [Independent-first elicitation](#independent-first-elicitation)
 - [Where peers help](#where-peers-help)
+- [Independent-first elicitation](#independent-first-elicitation)
 - [Framing and disagreement](#framing-and-disagreement)
 - [Personas and focused attention](#personas-and-focused-attention)
 - [Persuasion and synthesis](#persuasion-and-synthesis)
@@ -34,6 +34,23 @@ A useful peer can:
 
 Evaluate these moves on their substance. Do not reward obedience or disagreement
 for its own sake.
+
+## Where peers help
+
+Coding review, diagnosis, and bounded delegation are the common case, but a peer
+is often worth more outside code:
+
+- **Strategic decisions** with several stakeholders or trade-offs — use critique,
+  and direct attention (“evaluate the downstream effect on people in role X”)
+  rather than asking the peer to be anyone.
+- **Research framing** — “is this the right question?” or “what is a better
+  operationalization?” Independent-first consult fits best.
+- **Ethics and policy** where no answer is objectively correct — several lenses
+  surface considerations one model misses. Avoid personas especially here.
+- **Written work** such as essays, specs, and proposals — ask for specific kinds
+  of feedback (structure, clarity, what is missing) rather than casting an editor.
+- **Naming, taxonomy, and API design** — high-stakes, low-information decisions
+  where a second perspective is cheap relative to the cost of a poor choice.
 
 ## Independent-first elicitation
 
@@ -61,23 +78,6 @@ review round while retaining true identities in the run trace.
 Independent-first can lead into convergence: collect the peer's initial analysis,
 then share a revised position and ask what remains unresolved. This sequence gives
 a broader framing room to emerge before the conversation focuses on agreement.
-
-## Where peers help
-
-Coding review, diagnosis, and bounded delegation are the common case, but a peer
-is often worth more outside code:
-
-- **Strategic decisions** with several stakeholders or trade-offs — use critique,
-  and direct attention (“evaluate the downstream effect on people in role X”)
-  rather than asking the peer to be anyone.
-- **Research framing** — “is this the right question?” or “what is a better
-  operationalization?” Independent-first consult fits best.
-- **Ethics and policy** where no answer is objectively correct — several lenses
-  surface considerations one model misses. Avoid personas especially here.
-- **Written work** such as essays, specs, and proposals — ask for specific kinds
-  of feedback (structure, clarity, what is missing) rather than casting an editor.
-- **Naming, taxonomy, and API design** — high-stakes, low-information decisions
-  where a second perspective is cheap relative to the cost of a poor choice.
 
 ## Framing and disagreement
 
@@ -138,13 +138,14 @@ the pass produces no new evidence or unresolved concern.
 
 The driver owns the final synthesis. It should report:
 
-- meaningful agreement;
-- material disagreement;
-- decisive evidence;
-- remaining uncertainty; and
+- meaningful agreement and material disagreement;
+- the decisive evidence, and which of it was verified rather than asserted;
+- whether the peers changed the driver's recorded prediction, and what did;
+- what the peers could not do (denied tools, timeouts, missing participants); and
 - the driver's resulting judgment.
 
-Do not concatenate peer outputs and call it synthesis.
+`SKILL.md` gives the report template. Do not concatenate peer outputs and call it
+synthesis.
 
 ## Delegation quality
 
@@ -180,11 +181,13 @@ Prefer, in order:
 - comparison with an independently produced artifact; and
 - explicit acknowledgment that verification was not performed.
 
-LLM judges can help prioritize review but are not ground truth. A trace is useful
-only when it records what really happened; never fabricate checks to complete a
-schema. Prefer a check the coordinator executes (`verify --run`) to one you state
+LLM judges can help prioritize review but are not ground truth. A record is useful
+only when it states what really happened; never fabricate checks to complete one.
+
+Prefer a check the coordinator executes (`verify --run`) to one you state
 (`--check`): the first records an exit code, the second only your word
-(`RIF-DELEGATE-002`). Say "verified" to the user only after a check has run. Record checks while their evidence is available so they survive context compaction.
+(`RIF-DELEGATE-002`). Tell the user something is verified only after a check has
+run. Record checks while their evidence is available so they survive context compaction.
 
 When verification fails, preserve the peer's native session and send a focused
 follow-up. Do not restart from a compressed summary unless the native session is

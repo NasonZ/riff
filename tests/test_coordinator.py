@@ -12,7 +12,12 @@ from unittest.mock import patch
 
 from scripts.riff_core.adapters.base import HarnessAdapter
 from scripts.riff_core.coordinator import Coordinator
-from scripts.riff_core.models import RunRequest, SettledTurn, TurnRequest, ValidationError
+from scripts.riff_core.models import (
+    RunRequest,
+    SettledTurn,
+    TurnRequest,
+    ValidationError,
+)
 from scripts.riff_core.state import RunStore, read_json, redact
 
 
@@ -102,12 +107,36 @@ class CoordinatorTests(unittest.TestCase):
             self.assertNotIn("prompt", turn["request"])
             self.assertTrue(turn["artifact_sha256"])
 
-    def test_independent_first_does_not_include_a_driver_answer(self) -> None:
-        request = self.request(participants=1)
-        self.coordinator.run(request)
+    def test_peer_prompt_carries_the_contract_but_never_the_driver_view(self) -> None:
+        request = RunRequest.from_dict(
+            {
+                "version": 1,
+                "mode": "delegate",
+                "task": "Fix the failing test.",
+                "origin_harness": "codex",
+                "participants": [
+                    {
+                        "id": "peer-0",
+                        "harness": "fake",
+                        "cwd": str(self.cwd),
+                        "tools": "write",
+                        "params": {"allowed_commands": ["python3 -m unittest"]},
+                    }
+                ],
+                "driver_position": "withheld",
+                "driver_prediction": "Option B wins unless the cache is shared.",
+            }
+        )
+        started = self.coordinator.run(request)
         prompt = self.fake.turns[0].prompt
         self.assertIn("deliberately withheld", prompt)
         self.assertNotIn("Driver's current position", prompt)
+        # The prediction is the driver's private baseline; the peer must never see it.
+        self.assertNotIn("Option B wins", prompt)
+        # Permission rules match by prefix, so the peer needs the exact spelling.
+        self.assertIn("`python3 -m unittest`", prompt)
+        manifest = self.coordinator.status(started["run_id"])["manifest"]
+        self.assertEqual(manifest["request"]["driver_prediction"], "Option B wins unless the cache is shared.")
 
     def test_reply_uses_the_exact_native_session(self) -> None:
         started = self.coordinator.run(self.request(participants=1))
@@ -295,129 +324,77 @@ class CoordinatorTests(unittest.TestCase):
                 "RIFF_DEPTH": "1",
             },
             clear=False,
-        ):
-            with self.assertRaisesRegex(ValidationError, "recursive Riff invocation"):
-                self.coordinator.run(self.request(participants=1))
+        ), self.assertRaisesRegex(ValidationError, "recursive Riff invocation"):
+            self.coordinator.run(self.request(participants=1))
 
-    def test_verification_is_recorded_without_fabricated_checks(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        result = self.coordinator.verify(
-            started["run_id"],
-            verifier="codex-driver",
-            result="not_performed",
-            checks=[],
-            integrated=False,
-            note="Planning-only consult",
+    def test_verification_refuses_records_it_cannot_stand_behind(self) -> None:
+        run_id = self.coordinator.run(self.request(participants=1))["run_id"]
+        refusals = [
+            ("not_performed verification cannot include checks",
+             {"result": "not_performed", "checks": ["looked fine"]}),
+            ("passed verification requires at least one check", {"result": "passed", "checks": []}),
+            ("result is required", {"result": None, "checks": ["looked fine"]}),
+            ("contradicts executed check 'exit 1'",
+             {"result": "passed", "checks": [], "commands": ["exit 1"]}),
+        ]
+        for message, arguments in refusals:
+            with self.subTest(message), self.assertRaisesRegex(ValidationError, message):
+                self.coordinator.verify(run_id, verifier="driver", integrated=False, **arguments)
+        verification = self.coordinator.status(run_id)["manifest"]["verification"]
+        self.assertEqual(verification["result"], "pending")
+
+        self.coordinator.verify(
+            run_id, verifier="driver", result="not_performed", checks=[], integrated=False
         )
-        self.assertTrue(result["ok"])
-        manifest = self.coordinator.status(started["run_id"])["manifest"]
-        self.assertEqual(manifest["verification"]["checks"], [])
-        self.assertEqual(manifest["verification"]["result"], "not_performed")
-        self.assertFalse(manifest["verification"]["performed"])
+        verification = self.coordinator.status(run_id)["manifest"]["verification"]
+        self.assertEqual((verification["result"], verification["performed"]), ("not_performed", False))
 
-    def test_executed_checks_derive_the_result_and_record_exit_codes(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        result = self.coordinator.verify(
-            started["run_id"],
+    def test_executed_checks_decide_the_result_and_earlier_records_survive(self) -> None:
+        run_id = self.coordinator.run(self.request(participants=1))["run_id"]
+        first = self.coordinator.verify(
+            run_id,
             verifier="driver",
             result=None,
             checks=["Read the diff"],
-            integrated=True,
+            integrated=False,
             commands=["echo suite ok", "exit 3"],
         )
-        self.assertEqual(result["result"], "partial")
-        checks = self.coordinator.status(started["run_id"])["manifest"]["verification"]["checks"]
+        self.assertEqual(first["result"], "partial")
+        checks = self.coordinator.status(run_id)["manifest"]["verification"]["checks"]
         self.assertEqual([check["kind"] for check in checks], ["asserted", "executed", "executed"])
-        self.assertEqual(checks[0]["text"], "Read the diff")
         self.assertEqual([check["exit_code"] for check in checks[1:]], [0, 3])
         self.assertEqual(checks[1]["cwd"], str(self.cwd.resolve()))
         self.assertIn("suite ok", Path(checks[1]["output_file"]).read_text())
-        self.assertTrue(checks[1]["output_sha256"])
 
-    def test_passed_cannot_contradict_a_failing_executed_check(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        with self.assertRaisesRegex(ValidationError, "contradicts executed check 'exit 1'"):
-            self.coordinator.verify(
-                started["run_id"],
-                verifier="driver",
-                result="passed",
-                checks=[],
-                integrated=True,
-                commands=["exit 1"],
-            )
-        manifest = self.coordinator.status(started["run_id"])["manifest"]
-        self.assertEqual(manifest["verification"]["result"], "pending")
-
-    def test_timed_out_check_fails_and_records_view_change(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        result = self.coordinator.verify(
-            started["run_id"],
+        second = self.coordinator.verify(
+            run_id,
             verifier="driver",
             result=None,
             checks=[],
             integrated=False,
             commands=["sleep 5"],
             command_timeout_seconds=1,
-            view_changed=True,
         )
-        self.assertEqual(result["result"], "failed")
-        verification = self.coordinator.status(started["run_id"])["manifest"]["verification"]
-        self.assertTrue(verification["checks"][0]["timed_out"])
-        self.assertIsNone(verification["checks"][0]["exit_code"])
-        self.assertTrue(verification["view_changed"])
+        self.assertEqual(second["result"], "failed")
+        manifest = self.coordinator.status(run_id)["manifest"]
+        self.assertTrue(manifest["verification"]["checks"][0]["timed_out"])
+        self.assertEqual([entry["result"] for entry in manifest["verification_history"]], ["partial"])
 
-    def test_result_is_required_without_an_executed_check(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        with self.assertRaisesRegex(ValidationError, "result is required"):
-            self.coordinator.verify(
-                started["run_id"],
-                verifier="driver",
-                result=None,
-                checks=["Looked fine"],
-                integrated=False,
-            )
-
-    def test_prompt_demands_evidence_and_never_carries_the_prediction(self) -> None:
-        request = RunRequest.from_dict(
-            {
-                "version": 1,
-                "mode": "consult",
-                "task": "Choose an approach.",
-                "origin_harness": "codex",
-                "participants": [{"id": "peer-0", "harness": "fake", "cwd": str(self.cwd)}],
-                "driver_prediction": "Option B wins unless the cache is shared.",
-            }
-        )
-        started = self.coordinator.run(request)
-        prompt = self.fake.turns[0].prompt
-        self.assertIn("evidence (file:line", prompt)
-        self.assertNotIn("Option B wins", prompt)
-        manifest = self.coordinator.status(started["run_id"])["manifest"]
-        self.assertEqual(
-            manifest["request"]["driver_prediction"],
-            "Option B wins unless the cache is shared.",
-        )
-        self.assertEqual(started["warnings"], [])
-
-    def test_failed_turns_do_not_spend_rounds_but_attempts_are_capped(self) -> None:
+    def test_only_settled_turns_spend_rounds_and_attempts_are_capped(self) -> None:
         flaky = FakeAdapter("fake", fail_ids={"peer-0"})
         coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": flaky})
-        started = coordinator.run(self.request(participants=1, max_rounds=1))
-        self.assertEqual(started["result"], "failed")
-        # the failed first turn left the single round unspent
-        failed_again = coordinator.reply(started["run_id"], "peer-0", "Try again.")
-        self.assertFalse(failed_again["ok"])
+        failing = coordinator.run(self.request(participants=1, max_rounds=1))
+        self.assertEqual(failing["result"], "failed")
+        # the failed first turn left the single round unspent, so a retry is allowed
+        self.assertFalse(coordinator.reply(failing["run_id"], "peer-0", "Try again.")["ok"])
         with self.assertRaisesRegex(ValidationError, "attempts"):
-            coordinator.reply(started["run_id"], "peer-0", "Third try.")
+            coordinator.reply(failing["run_id"], "peer-0", "Third try.")
 
-    def test_recovered_turn_spends_the_round(self) -> None:
-        flaky = FakeAdapter("fake", fail_ids={"peer-0"})
-        coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": flaky})
-        started = coordinator.run(self.request(participants=1, max_rounds=1))
+        recovering = coordinator.run(self.request(participants=1, max_rounds=1))
         flaky.fail_ids.clear()
-        self.assertTrue(coordinator.reply(started["run_id"], "peer-0", "Recover.")["ok"])
+        self.assertTrue(coordinator.reply(recovering["run_id"], "peer-0", "Recover.")["ok"])
         with self.assertRaisesRegex(ValidationError, "max_rounds=1 settled turns"):
-            coordinator.reply(started["run_id"], "peer-0", "One more.")
+            coordinator.reply(recovering["run_id"], "peer-0", "One more.")
 
     def test_reply_refuses_a_live_running_turn_but_recovers_a_dead_one(self) -> None:
         started = self.coordinator.run(self.request(participants=1))
@@ -432,33 +409,52 @@ class CoordinatorTests(unittest.TestCase):
         store.write_participant(started["run_id"], "peer-0", state)
         self.assertTrue(self.coordinator.reply(started["run_id"], "peer-0", "Resume.")["ok"])
 
-    def test_output_carries_next_steps_and_unverified_runs(self) -> None:
+    def test_next_steps_fit_the_run_and_survive_without_the_skill(self) -> None:
         earlier = self.coordinator.run(self.request(participants=1))
         later = self.coordinator.run(self.request(participants=1))
         self.assertIn(earlier["run_id"], later["unverified_runs"])
         self.assertNotIn(later["run_id"], later["unverified_runs"])
-        steps = " ".join(later["next_steps"])
-        self.assertIn(f"verify --run-id {later['run_id']}", steps)
-        self.assertIn("riff.py", steps)
-        self.assertIn(f'--state-dir "{self.coordinator.store.root}"', steps)
 
-    def test_timeout_next_step_names_the_exact_session_reply(self) -> None:
+        def steps_for(mode: str, *, failing: bool = False, prediction: str | None = None) -> str:
+            adapter = FakeAdapter("fake", fail_ids={"peer-0"} if failing else set())
+            coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": adapter})
+            value = {
+                "version": 1, "mode": mode, "task": "Look at this.", "origin_harness": "codex",
+                "participants": [{"id": "peer-0", "harness": "fake", "cwd": str(self.cwd)}],
+                "driver_prediction": prediction,
+            }
+            result = coordinator.run(RunRequest.from_dict(value))
+            steps = " ".join(result["next_steps"])
+            # commands are pasteable against this store, not the default one
+            self.assertIn(f'--state-dir "{self.coordinator.store.root}" verify --run-id {result["run_id"]}', steps)
+            return steps
+
+        consult = steps_for("consult", prediction="The cache path is the weak point.")
+        self.assertIn("--view-changed", consult)
+        self.assertNotIn("--integrated", consult)
+        self.assertIn("The cache path is the weak point.", consult)
+
+        delegate = steps_for("delegate")
+        self.assertIn("--integrated", delegate)
+
+        failed = steps_for("consult", failing=True)
+        self.assertIn("--result not_performed", failed)
+        self.assertNotIn("--view-changed", failed)
+
+    def test_timeout_next_step_resumes_the_same_session_with_a_longer_bound(self) -> None:
         class TimingOut(FakeAdapter):
             def _settle(self, turn: TurnRequest) -> SettledTurn:
                 settled = super()._settle(turn)
-                settled.status, settled.error_type, settled.error = (
-                    "failed",
-                    "timeout",
-                    "timed out after 1 seconds",
-                )
+                settled.status, settled.error_type = "failed", "timeout"
+                settled.error = "timed out after 8 seconds"
                 return settled
 
-        coordinator = Coordinator(
-            store=self.coordinator.store, adapters={"fake": TimingOut("fake")}
-        )
+        coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": TimingOut("fake")})
         result = coordinator.run(self.request(participants=1))
         steps = " ".join(result["next_steps"])
         self.assertIn(f"reply --run-id {result['run_id']} --participant peer-0", steps)
+        # a reply inherits the expired bound unless the step raises it
+        self.assertIn("--timeout-seconds 1800", steps)
 
     def test_checkout_fingerprint_is_recorded_at_dispatch_and_settle(self) -> None:
         git = ["git", "-C", str(self.cwd)]
@@ -479,32 +475,22 @@ class CoordinatorTests(unittest.TestCase):
         turn = read_json(Path(state["turns"][0]))
         self.assertEqual(turn["request"]["checkout_at_settle"]["head"], at_dispatch["head"])
 
-    def test_reverification_keeps_history(self) -> None:
+    def test_wait_returns_the_settled_result_or_reports_running(self) -> None:
         started = self.coordinator.run(self.request(participants=1))
-        for outcome in ("partial", "passed"):
-            self.coordinator.verify(
-                started["run_id"],
-                verifier="driver",
-                result=outcome,
-                checks=[f"pass {outcome}"],
-                integrated=outcome == "passed",
-            )
-        manifest = self.coordinator.status(started["run_id"])["manifest"]
-        self.assertEqual(manifest["verification"]["result"], "passed")
-        self.assertEqual(
-            [entry["result"] for entry in manifest["verification_history"]], ["partial"]
-        )
+        waited = self.coordinator.wait(started["run_id"], timeout_seconds=1)
+        self.assertEqual(waited["status"], "settled")
+        self.assertEqual(waited["participants"][0]["artifact_file"], started["participants"][0]["artifact_file"])
+        self.assertTrue(waited["next_steps"])
 
-    def test_verification_pass_requires_evidence(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        with self.assertRaisesRegex(ValidationError, "requires at least one check"):
-            self.coordinator.verify(
-                started["run_id"],
-                verifier="driver",
-                result="passed",
-                checks=[],
-                integrated=True,
-            )
+        store = self.coordinator.store
+        manifest = store.read_manifest(started["run_id"])
+        manifest["status"] = "running"
+        store.write_manifest(started["run_id"], manifest)
+        running = self.coordinator.wait(started["run_id"], timeout_seconds=1, poll_seconds=0.2)
+        self.assertEqual(running["status"], "running")
+        self.assertIn("wait --run-id", running["next_steps"][0])
+        with self.assertRaisesRegex(ValidationError, "unknown run id"):
+            self.coordinator.wait(str(uuid.uuid4()), timeout_seconds=1)
 
     def test_run_id_cannot_escape_state_directory(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid run id"):

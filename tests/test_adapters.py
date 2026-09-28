@@ -68,6 +68,7 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--model") + 1], "sonnet")
         self.assertEqual(command[command.index("--effort") + 1], "high")
         self.assertEqual(command[command.index("--tools") + 1], "Read,Grep,Glob")
+        self.assertNotIn("--allowedTools", command)  # read tools need no pre-approval
 
     def test_claude_read_plus_web_scope_adds_and_preapproves_web_tools_only(self) -> None:
         command, _, _ = ClaudeAdapter().build_command(
@@ -80,10 +81,6 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--permission-mode") + 1], "dontAsk")
         # dontAsk denies an available tool unless it is pre-approved.
         self.assertEqual(command[command.index("--allowedTools") + 1], "WebSearch,WebFetch")
-
-    def test_claude_read_scope_preapproves_nothing(self) -> None:
-        command, _, _ = ClaudeAdapter().build_command(self.turn("claude", tools="read"))
-        self.assertNotIn("--allowedTools", command)
 
     def test_claude_write_peer_may_run_only_listed_command_prefixes(self) -> None:
         command, _, _ = ClaudeAdapter().build_command(
@@ -139,6 +136,7 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertIn("native-session", command)
         self.assertNotIn("--last", command)
         self.assertIn('model_reasoning_effort="xhigh"', command)
+        self.assertEqual(command[command.index("--model") + 1], "gpt-5")
 
     def test_pi_uses_rpc_settlement_and_explicit_session(self) -> None:
         command, _, session_id = PiAdapter().build_command(
@@ -154,8 +152,15 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--session-id") + 1], session_id)
         self.assertEqual(command[command.index("--thinking") + 1], "high")
         self.assertEqual(command[command.index("--tools") + 1], "read,grep,find,ls")
+        self.assertEqual(command[command.index("--model") + 1], "qwen")
+        self.assertEqual(command[command.index("--provider") + 1], "llama.cpp")
 
-    def test_hermes_rejects_write_until_permissions_are_enforceable(self) -> None:
+    def test_hermes_maps_model_and_rejects_write_until_enforceable(self) -> None:
+        command = HermesAdapter().build_command(
+            self.turn("hermes", tools="read", model="qwen", provider="custom")
+        )
+        self.assertEqual(command[command.index("--model") + 1], "qwen")
+        self.assertEqual(command[command.index("--provider") + 1], "custom")
         with self.assertRaisesRegex(ValidationError, "write delegation is disabled"):
             HermesAdapter().build_command(self.turn("hermes", tools="write"))
 
@@ -171,9 +176,8 @@ class AdapterCommandTests(unittest.TestCase):
             (HermesAdapter(), self.turn("hermes", params={"max_turns": True})),
         )
         for adapter, turn in cases:
-            with self.subTest(adapter=adapter.name):
-                with self.assertRaises(ValidationError):
-                    adapter.validate(turn)
+            with self.subTest(adapter=adapter.name), self.assertRaises(ValidationError):
+                adapter.validate(turn)
 
 
 if __name__ == "__main__":

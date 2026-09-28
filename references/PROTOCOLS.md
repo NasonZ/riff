@@ -28,9 +28,20 @@ Every run has:
 Participant IDs identify instances, not models. `pi-a` and `pi-b` may use the same
 Pi harness with different models, providers, thinking settings, or prompts.
 
-Use `tools: none` for reasoning that needs no repository evidence. Use
-`tools: read` for inspection. Use `tools: write` only when the user has authorized
-changes and the participant has an isolated writable directory.
+Choose the tool scope from what the acceptance criteria require
+(`RIF-AUTHORITY-002`):
+
+- `none` — reasoning that needs no repository evidence;
+- `read` — inspection of the working directory (add `params.add_dirs` for a Claude
+  peer that must read elsewhere);
+- `read+web` — inspection plus web search and fetch, for claims that must be checked
+  against external sources (Claude peers only);
+- `write` — only when the user has authorized changes and the participant has an
+  isolated worktree or writable directory.
+
+A scope too narrow for the task does not fail loudly: the peer is denied, works
+around the gap, and the run still settles. The run output lists `denied_tools`;
+check it.
 
 ## Consult
 
@@ -38,11 +49,12 @@ Use consult for one-shot independent analysis, review, diagnosis, or reframing.
 
 Default flow:
 
-1. Send the task and necessary evidence without the driver's proposed answer.
+1. Record `driver_prediction`, then send the task and necessary evidence without
+   the driver's proposed answer.
 2. Collect one settled artifact from every participant.
 3. Inspect claims and evidence.
-4. Compare with the driver's position.
-5. Verify material claims and synthesize.
+4. Compare with the recorded prediction.
+5. Verify material claims, record the verification, and synthesize.
 
 When the user explicitly asks to critique a proposal, send the proposal on the
 first turn and record `driver_position: provided`. Do not add a ceremonial second
@@ -79,7 +91,8 @@ Default flow:
 2. Let the driver identify the most important divergence.
 3. Send targeted follow-ups to the relevant native sessions.
 4. Optionally show opaque peer extracts for cross-review.
-5. Stop after at most three rounds unless the user requests more.
+5. Stop after at most three settled turns per participant (the default
+   `max_rounds`) unless the user requests more.
 6. Synthesize; do not use a majority vote as a substitute for judgment.
 
 The driver mediates discussion. Participants do not recursively invoke Riff or
@@ -113,10 +126,12 @@ For write-capable work:
 If a task would duplicate writes across participants and no dispatch shape is
 clear, stop before launching and clarify the decomposition.
 
-A run blocks the caller until every participant settles. Wait on it for short
-work. For long work, launch it in the background with a preallocated run ID and
-continue only when the driver has genuinely independent work to do; do not
-background a run just because it is possible, since the bookkeeping has a cost.
+A run blocks the caller until every participant settles, but prints its run ID on
+stderr as soon as it starts. Wait on it for short work. For long work, or whenever
+the driver's shell caps a single call, use `run --detach` and follow with bounded
+`wait --run-id` calls; the detached run survives the driver's session, and `wait`
+returns the same result JSON, next steps included. Do independent work in between
+only when there is some; polling has a cost.
 
 Expect delegation to take two turns: a first delivery, then a tightening pass
 through the same native session.
@@ -162,8 +177,9 @@ A multi-peer discussion including two instances of the same harness:
 }
 ```
 
-Record actual harness/provider/model identity in the trace. During peer review,
-opaque labels can reduce prestige anchoring, but the driver must retain provenance.
+Riff records each participant's harness, provider, and model; carry that identity
+into the synthesis. During peer review, opaque labels can reduce prestige
+anchoring, but the driver must retain provenance.
 If several participants share a single-slot local inference endpoint, keep their
 identities distinct but set coordinator concurrency to one.
 
@@ -203,11 +219,12 @@ If a process is interrupted:
 If an intended independent-first prompt accidentally included the driver's answer,
 start a fresh native session. A follow-up cannot undo the initial anchoring.
 
-For Pi, use `riff.py progress` while the process is active or after a coordinator
-timeout. A timeout is a failed turn, not necessarily a lost session: once the native
-session file appears, an exact-session `reply` can request a concise synthesis or
-continue the work. Failed turns do not spend `max_rounds`, so recovery never costs
-the discussion a round; attempts are capped at twice the round budget.
+A timeout is a failed turn, not necessarily a lost session. Reply to the same
+participant asking for a concise final answer when its native session remains
+recoverable. Failed turns do not spend `max_rounds`, so recovery never
+costs the discussion a round; attempts are capped at twice the round budget. For Pi,
+`riff.py progress` shows whether the turn made progress before it timed out, and the
+native session file must exist before a reply can resume it.
 
 Classify a failure before retrying it (`RIF-FAILURE-001`). `rate_limit` and `auth`
 fail identically on an unchanged retry: report the stated reset or the credential

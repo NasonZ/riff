@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, replace
+from dataclasses import asdict, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ RIFF_SCRIPT = Path(__file__).resolve().parent.parent / "riff.py"
 UNVERIFIED_LOOKBACK_SECONDS = 7 * 24 * 3600
 UNVERIFIED_LIMIT = 5
 VERIFY_OUTPUT_TAIL_CHARS = 2000  # enough to show a failing assertion without copying a whole log
+DEFAULT_WAIT_SECONDS = 540  # under the ~10 min per-call limit common to agent shells
 ATTEMPT_FACTOR = 2  # failed turns allowed per round before a participant is considered broken
 
 
@@ -51,7 +53,17 @@ class Coordinator:
                 result[name] = adapter.capability()
             except (OSError, RuntimeError, ValueError) as error:
                 result[name] = {"harness": name, "available": False, "error": str(error)}
-        return {"schema_version": 1, "harnesses": result}
+        return {
+            "schema_version": 1,
+            # A driver once concluded the model could not be pinned because only the
+            # adapter-specific keys were listed; name the shared fields explicitly.
+            "participant_fields": [spec_field.name for spec_field in fields(ParticipantSpec)],
+            "note": (
+                "Every harness honours the participant fields model and provider; "
+                "each harness's 'parameters' are the extra keys it accepts inside params."
+            ),
+            "harnesses": result,
+        }
 
     def validate(self, request: RunRequest) -> RunRequest:
         """Validate shared and adapter-specific request semantics without launching."""
@@ -234,7 +246,7 @@ class Coordinator:
             self._mark_turn_running(run_id, participant, turn)
             try:
                 result = self._execute_turn(turn)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 — an adapter crash becomes a recorded failed turn, never a lost run
                 result = self._adapter_failure(participant, turn, error)
             self._record_turn(run_id, participant, turn, result)
         with self.store.run_lock(run_id):
@@ -256,6 +268,69 @@ class Coordinator:
             for participant_id in manifest["participants"]
         }
         return {"manifest": manifest, "participant_state": participants}
+
+    def wait(
+        self,
+        run_id: str,
+        *,
+        timeout_seconds: int = DEFAULT_WAIT_SECONDS,
+        poll_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Block until a run settles or the bound passes, whichever is first.
+
+        The bound sits under common agent tool-call limits, so a driver that cannot
+        keep a background task alive (a non-interactive session) can follow a long
+        run through repeated bounded calls instead of losing it."""
+        if not 1 <= timeout_seconds <= 3600:
+            raise ValidationError("wait timeout must be between 1 and 3600 seconds")
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            state = self._settled_state(run_id)
+            if state == "settled":
+                return self.result(run_id)
+            if state == "failed-to-start" or time.monotonic() >= deadline:
+                break
+            time.sleep(poll_seconds)
+        if state == "failed-to-start":
+            detached = self.store.root / "detached" / f"{run_id}.err"
+            raise ValidationError(
+                f"run {run_id} never started: "
+                + (detached.read_text()[-2000:] if detached.is_file() else "no run record")
+            )
+        return {
+            "ok": False,
+            "run_id": run_id,
+            "status": "running",
+            "next_steps": [
+                f"Still running; call {self.script_invocation()} wait --run-id {run_id} again."
+            ],
+        }
+
+    def result(self, run_id: str) -> dict[str, Any]:
+        """Rebuild the public result of a settled run from its latest turn records."""
+        manifest = self.store.read_manifest(run_id)
+        latest: list[SettledTurn] = []
+        for participant_id in manifest["participants"]:
+            turns = self.store.read_participant(run_id, participant_id).get("turns") or []
+            if turns:
+                execution = json.loads(Path(turns[-1]).read_text())["execution"]
+                latest.append(SettledTurn(**execution))
+        public = self._public_result(run_id, latest)
+        public["status"] = manifest.get("status")
+        public["warnings"] = manifest.get("warnings") or []
+        return public
+
+    def _settled_state(self, run_id: str) -> str:
+        if not self.store.manifest_path(run_id).is_file():
+            detached = self.store.root / "detached" / f"{run_id}.err"
+            pid_file = self.store.root / "detached" / f"{run_id}.pid"
+            if pid_file.is_file() and not _process_alive(int(pid_file.read_text() or 0)):
+                return "failed-to-start"
+            if not pid_file.is_file() and not detached.is_file():
+                raise ValidationError(f"unknown run id: {run_id}")
+            return "starting"
+        manifest = self.store.read_manifest(run_id)
+        return "settled" if manifest.get("status") in {"settled", "failed"} else "running"
 
     def progress(
         self,
@@ -410,6 +485,7 @@ class Coordinator:
         try:
             completed = subprocess.run(
                 ["/bin/sh", "-c", command],
+                check=False,
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -501,7 +577,7 @@ class Coordinator:
                 participant, turn = futures[future]
                 try:
                     result = future.result()
-                except Exception as error:  # adapter failures must remain visible
+                except Exception as error:  # noqa: BLE001 — adapter failures must remain visible as failed turns
                     result = self._adapter_failure(participant, turn, error)
                 self._record_turn(run_id, participant, turn, result)
                 results.append(result)
@@ -548,7 +624,7 @@ class Coordinator:
             try:
                 self._mark_turn_running(run_id, participant, turn)
                 result = self._execute_turn(turn)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 — an adapter crash becomes a recorded failed turn, never a lost run
                 result = self._adapter_failure(participant, turn, error)
             self._record_turn(run_id, participant, turn, result)
             results.append(result)
@@ -663,11 +739,20 @@ class Coordinator:
                 "Acceptance criteria\n"
                 + "\n".join(f"- {item}" for item in request.acceptance_criteria)
             )
-        parts.append(
-            "Authority\n"
+        authority = (
             f"Tool scope is {participant.tools}. Do not exceed it. "
             "Do not invoke Riff or another agent."
         )
+        commands = participant.params.get("allowed_commands") or []
+        if commands:
+            # The permission rule matches by prefix, so the peer must know the exact
+            # spelling (field: a peer ran python3 where python was allowed).
+            authority += (
+                " The only shell commands you may run are those beginning with: "
+                + "; ".join(f"`{command}`" for command in commands)
+                + ". Run them exactly as written, without cd, pipes, or chaining."
+            )
+        parts.append("Authority\n" + authority)
         parts.append(
             "Response\nReturn a self-contained artifact. Give each material claim its "
             "evidence (file:line, command and result, or source URL), or label it "
@@ -726,7 +811,8 @@ class Coordinator:
     def _public_result(
         self, run_id: str, results: list[SettledTurn]
     ) -> dict[str, Any]:
-        overall = self.store.read_manifest(run_id)["result"]
+        manifest = self.store.read_manifest(run_id)
+        overall = manifest["result"]
         participants = []
         notices = []
         for result in results:
@@ -757,6 +843,7 @@ class Coordinator:
                     "artifact_file": result.artifact_file,
                     "elapsed_ms": result.elapsed_ms,
                     "cost_usd": result.adapter_metadata.get("cost_usd"),
+                    "usage": result.usage,
                     "denied_tools": denied,
                     "error_type": result.error_type,
                     "error": result.error,
@@ -771,7 +858,14 @@ class Coordinator:
             "manifest_file": str(self.store.manifest_path(run_id)),
             "notices": notices,
             "participants": participants,
-            "next_steps": _next_steps(run_id, results, notices, self.script_invocation()),
+            "next_steps": _next_steps(
+                run_id,
+                results,
+                notices,
+                self.script_invocation(),
+                mode=manifest.get("mode"),
+                prediction=(manifest.get("request") or {}).get("driver_prediction"),
+            ),
         }
 
     def script_invocation(self) -> str:
@@ -817,12 +911,14 @@ def _checkout_fingerprint(cwd: str) -> dict[str, Any] | None:
     try:
         head = subprocess.run(
             ["git", "-C", cwd, "rev-parse", "HEAD"],
+            check=False,
             capture_output=True, text=True, timeout=10,
         )
         if head.returncode != 0:
             return None
         status = subprocess.run(
             ["git", "-C", cwd, "status", "--porcelain"],
+            check=False,
             capture_output=True, text=True, timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -848,7 +944,13 @@ def _process_alive(pid: Any) -> bool:
 
 
 def _next_steps(
-    run_id: str, results: list[SettledTurn], notices: list[dict[str, str]], script: str
+    run_id: str,
+    results: list[SettledTurn],
+    notices: list[dict[str, str]],
+    script: str,
+    *,
+    mode: str | None,
+    prediction: str | None,
 ) -> list[str]:
     """Driver obligations carried in the tool output itself, because the skill text
     can fall out of a driver's context after compaction."""
@@ -856,9 +958,15 @@ def _next_steps(
     steps.extend(notice["message"] for notice in notices)
     for result in results:
         if result.error_type == "timeout" and result.native_session_id:
+            # A reply inherits the previous timeout; recovering under the same bound
+            # that just expired can repeat the same failure.
+            match = re.search(r"after (\d+) seconds", result.error or "")
+            previous = int(match.group(1)) if match else DEFAULT_TIMEOUT_SECONDS
+            longer = max(DEFAULT_TIMEOUT_SECONDS, 2 * previous)
             steps.append(
                 f"{result.participant_id} timed out but its session survives: {script} reply "
-                f"--run-id {run_id} --participant {result.participant_id} --prompt "
+                f"--run-id {run_id} --participant {result.participant_id} "
+                f"--timeout-seconds {min(longer, 86400)} --prompt "
                 "'Stop exploring and write your final answer now.' (failed turns do not "
                 "spend max_rounds)"
             )
@@ -872,14 +980,41 @@ def _next_steps(
                 f"{result.participant_id} failed authentication; fix that harness's "
                 "credentials or model configuration before retrying, and tell the user."
             )
-    steps.append(
-        "Verify decisive claims before relying on them, then record it: "
-        f"{script} verify --run-id {run_id} --verifier <driver> --run '<test command>' "
-        "--check '<what you inspected>' [--view-changed yes|no] [--integrated]; "
-        "or --result not_performed if you checked nothing. Never report a check you did "
-        "not run."
-    )
+    record = f"{script} verify --run-id {run_id} --verifier <driver>"
+    if not any(result.ok for result in results):
+        # Nothing came back to verify; the honest record says so.
+        steps.append(
+            "No peer produced an answer. After telling the user, record that: "
+            f"{record} --result not_performed --note '<what failed>'."
+        )
+        return steps
+    if mode == "delegate":
+        steps.append(
+            "Run the acceptance checks yourself before integrating, and record them: "
+            f"{record} --run '<acceptance command>' --check '<diff you reviewed>' "
+            "--integrated (only once you have applied the change)."
+        )
+    else:
+        # Consults rarely have a test to run; reading claims against the code or a
+        # source is a real check, recorded as asserted (field: drivers skipped the
+        # record when the only template offered was a test command).
+        steps.append(
+            "Check the decisive claims against the code or the cited sources, then "
+            f"record what you did: {record} --check '<what you read or compared>' "
+            "[--run '<command that confirms a claim>'] --view-changed yes|no."
+        )
+    if prediction:
+        steps.append(
+            f'Your recorded prediction was: "{_clip(prediction, 240)}". Tell the user '
+            "whether the peers changed it, and what did."
+        )
+    steps.append("Never tell the user something was verified unless a check ran.")
     return steps
+
+
+def _clip(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _derive_verification(executed: list[dict[str, Any]]) -> str | None:

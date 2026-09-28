@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 import re
-import signal
 import shutil
+import signal
 import subprocess
 import time
 from abc import ABC, abstractmethod
@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from ..models import SettledTurn, TurnRequest, ValidationError
-
 
 PEER_SYSTEM_NOTE = """You are an independent peer in a Riff collaboration.
 Analyze on evidence. Challenge or reframe the question when warranted. Do not
@@ -110,8 +109,8 @@ def _terminate_process_group(process: subprocess.Popen[str]) -> None:
         process.wait(timeout=5)
 
 
-RATE_LIMIT_TEXT = re.compile(r"\b429\b|rate.?limit|usage limit|session limit|quota", re.I)
-AUTH_TEXT = re.compile(r"\b40[13]\b|unauthori[sz]ed|incorrect api key|invalid api key", re.I)
+RATE_LIMIT_TEXT = re.compile(r"\b429\b|rate.?limit|usage limit|session limit|quota", re.IGNORECASE)
+AUTH_TEXT = re.compile(r"\b40[13]\b|unauthori[sz]ed|incorrect api key|invalid api key", re.IGNORECASE)
 
 
 def classify_error_text(text: str | None) -> str | None:
