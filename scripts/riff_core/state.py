@@ -13,11 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 SECRET_KEY = re.compile(
     r"(?:api[_-]?key|secret|password|authorization|bearer|"
     r"(?:access|refresh|oauth|auth)[_-]?token)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -53,7 +52,7 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
 def read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text())
     if not isinstance(value, dict):
-        raise ValueError(f"expected JSON object in {path}")
+        raise ValueError(f"expected JSON object in {path}")  # noqa: TRY004 — well-formed JSON of the wrong shape is a bad value
     return value
 
 

@@ -18,7 +18,6 @@ from .base import (
     run_process,
 )
 
-
 SESSION_PATTERN = re.compile(r"^\s*session_id:\s*(\S+)\s*$", re.MULTILINE)
 
 

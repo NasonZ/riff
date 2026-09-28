@@ -176,9 +176,8 @@ class AdapterCommandTests(unittest.TestCase):
             (HermesAdapter(), self.turn("hermes", params={"max_turns": True})),
         )
         for adapter, turn in cases:
-            with self.subTest(adapter=adapter.name):
-                with self.assertRaises(ValidationError):
-                    adapter.validate(turn)
+            with self.subTest(adapter=adapter.name), self.assertRaises(ValidationError):
+                adapter.validate(turn)
 
 
 if __name__ == "__main__":

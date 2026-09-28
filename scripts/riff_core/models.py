@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, replace
-from pathlib import Path
 import re
 import uuid
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
 from typing import Any, Literal
-
 
 Json = None | bool | int | float | str | list["Json"] | dict[str, "Json"]
 Mode = Literal["consult", "discuss", "delegate"]
@@ -67,7 +66,7 @@ class ParticipantSpec:
     focus: str | None = None
 
     @classmethod
-    def from_dict(cls, value: Any, *, default_cwd: str) -> "ParticipantSpec":
+    def from_dict(cls, value: Any, *, default_cwd: str) -> ParticipantSpec:
         if not isinstance(value, dict):
             raise ValidationError("each participant must be an object")
         allowed = {
@@ -156,7 +155,7 @@ class CoordinationSpec:
     concurrency: int = 4
 
     @classmethod
-    def from_dict(cls, value: Any, *, participant_count: int) -> "CoordinationSpec":
+    def from_dict(cls, value: Any, *, participant_count: int) -> CoordinationSpec:
         if value is None:
             value = {}
         if not isinstance(value, dict):
@@ -231,7 +230,7 @@ class RunRequest:
     depth: int = 0
 
     @classmethod
-    def from_dict(cls, value: Any, *, default_cwd: str | None = None) -> "RunRequest":
+    def from_dict(cls, value: Any, *, default_cwd: str | None = None) -> RunRequest:
         if not isinstance(value, dict):
             raise ValidationError("request must be a JSON object")
         allowed = {
@@ -382,17 +381,17 @@ PERSONA_CUE = re.compile(
     r"\b(?:act(?:ing)? as|pretend(?:ing)? (?:to be|you are)|role-?play|"
     r"you are an? (?:legendary|world[- ]class|renowned|famous|brilliant|seasoned|"
     r"veteran|senior|expert)\b)",
-    re.I,
+    re.IGNORECASE,
 )
 POSITION_CUE = re.compile(
     r"\b(?:I think|I believe|I suspect|I propose|I recommend|I(?:'m| am) leaning|"
     r"my (?:view|position|answer|proposal|recommendation|hypothesis|take)\b)",
-    re.I,
+    re.IGNORECASE,
 )
 WEB_CUE = re.compile(
     r"https?://|\b(?:web ?search|on the web|online sources?|external (?:sources?|claims?)|"
     r"cited (?:urls?|links?|sources?)|upstream (?:docs|issues?))\b",
-    re.I,
+    re.IGNORECASE,
 )
 FAN_OUT_LIMIT = 5
 

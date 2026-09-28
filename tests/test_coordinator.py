@@ -12,7 +12,12 @@ from unittest.mock import patch
 
 from scripts.riff_core.adapters.base import HarnessAdapter
 from scripts.riff_core.coordinator import Coordinator
-from scripts.riff_core.models import RunRequest, SettledTurn, TurnRequest, ValidationError
+from scripts.riff_core.models import (
+    RunRequest,
+    SettledTurn,
+    TurnRequest,
+    ValidationError,
+)
 from scripts.riff_core.state import RunStore, read_json, redact
 
 
@@ -319,9 +324,8 @@ class CoordinatorTests(unittest.TestCase):
                 "RIFF_DEPTH": "1",
             },
             clear=False,
-        ):
-            with self.assertRaisesRegex(ValidationError, "recursive Riff invocation"):
-                self.coordinator.run(self.request(participants=1))
+        ), self.assertRaisesRegex(ValidationError, "recursive Riff invocation"):
+            self.coordinator.run(self.request(participants=1))
 
     def test_verification_refuses_records_it_cannot_stand_behind(self) -> None:
         run_id = self.coordinator.run(self.request(participants=1))["run_id"]
@@ -334,9 +338,8 @@ class CoordinatorTests(unittest.TestCase):
              {"result": "passed", "checks": [], "commands": ["exit 1"]}),
         ]
         for message, arguments in refusals:
-            with self.subTest(message):
-                with self.assertRaisesRegex(ValidationError, message):
-                    self.coordinator.verify(run_id, verifier="driver", integrated=False, **arguments)
+            with self.subTest(message), self.assertRaisesRegex(ValidationError, message):
+                self.coordinator.verify(run_id, verifier="driver", integrated=False, **arguments)
         verification = self.coordinator.status(run_id)["manifest"]["verification"]
         self.assertEqual(verification["result"], "pending")
 

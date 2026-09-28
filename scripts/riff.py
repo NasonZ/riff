@@ -95,8 +95,10 @@ def _detach(coordinator: Coordinator, request: RunRequest, run_id: str) -> dict[
         "status": "running",
         "warnings": coordinator.warnings(request),
         "next_steps": [
-            f"Follow it with {coordinator.script_invocation()} wait --run-id {run_id} "
-            "(returns within about nine minutes; call again while it reports running)."
+            (
+                f"Follow it with {coordinator.script_invocation()} wait --run-id {run_id} "
+                "(returns within about nine minutes; call again while it reports running)."
+            )
         ],
     }
 

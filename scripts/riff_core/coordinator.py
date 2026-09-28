@@ -246,7 +246,7 @@ class Coordinator:
             self._mark_turn_running(run_id, participant, turn)
             try:
                 result = self._execute_turn(turn)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 — an adapter crash becomes a recorded failed turn, never a lost run
                 result = self._adapter_failure(participant, turn, error)
             self._record_turn(run_id, participant, turn, result)
         with self.store.run_lock(run_id):
@@ -485,6 +485,7 @@ class Coordinator:
         try:
             completed = subprocess.run(
                 ["/bin/sh", "-c", command],
+                check=False,
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -576,7 +577,7 @@ class Coordinator:
                 participant, turn = futures[future]
                 try:
                     result = future.result()
-                except Exception as error:  # adapter failures must remain visible
+                except Exception as error:  # noqa: BLE001 — adapter failures must remain visible as failed turns
                     result = self._adapter_failure(participant, turn, error)
                 self._record_turn(run_id, participant, turn, result)
                 results.append(result)
@@ -623,7 +624,7 @@ class Coordinator:
             try:
                 self._mark_turn_running(run_id, participant, turn)
                 result = self._execute_turn(turn)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 — an adapter crash becomes a recorded failed turn, never a lost run
                 result = self._adapter_failure(participant, turn, error)
             self._record_turn(run_id, participant, turn, result)
             results.append(result)
@@ -910,12 +911,14 @@ def _checkout_fingerprint(cwd: str) -> dict[str, Any] | None:
     try:
         head = subprocess.run(
             ["git", "-C", cwd, "rev-parse", "HEAD"],
+            check=False,
             capture_output=True, text=True, timeout=10,
         )
         if head.returncode != 0:
             return None
         status = subprocess.run(
             ["git", "-C", cwd, "status", "--porcelain"],
+            check=False,
             capture_output=True, text=True, timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired):

@@ -169,7 +169,7 @@ class AdapterProcessTests(unittest.TestCase):
 
         def riff(*args):
             done = subprocess.run([sys.executable, script, "--state-dir", state, *args],
-                                  capture_output=True, text=True, env=env, timeout=60)
+                                  capture_output=True, text=True, env=env, timeout=60, check=False)
             self.assertEqual(done.returncode, 0, done.stderr)
             return json.loads(done.stdout)
 
