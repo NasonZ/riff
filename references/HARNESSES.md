@@ -22,8 +22,9 @@ Every adapter must:
 - accept an explicit working directory, model, tool scope, timeout, and parameters;
 - return a stable native session handle for follow-ups;
 - write the final peer response to an artifact;
-- preserve distinct timeout, transport, parse, refusal, permission, model, and
-  process error categories when the native protocol reports them;
+- preserve distinct timeout, transport, parse, refusal, permission, model,
+  `rate_limit`, `auth`, and process error categories when the native protocol
+  reports them, because each calls for a different recovery;
 - wait for the harness's true settlement condition;
 - avoid loading Riff recursively in the child; and
 - preserve the user's explicit model and reasoning controls without inventing a
@@ -135,10 +136,12 @@ run is active. If a child dies before the event stream is captured:
    situational note. Native resume retains the worker's working memory; a hand-made
    rebrief substitutes the driver's lossy summary.
 
+This is a recovery path, not normal identity management; the adapter's explicit
+thread ID remains authoritative.
+
 For long background CLI work, redirect stdout/stderr to a regular file. A pipeline
 such as `| tail` can kill an otherwise healthy orphaned producer with `SIGPIPE` when
-the invoking harness exits. This is a recovery path, not normal identity
-management; the adapter's explicit thread ID remains authoritative.
+the invoking harness exits.
 
 When Codex is the driver, its own sandbox also applies to `riff.py`. Under
 `workspace-write` the default state root (`~/.local/state/riff`) is outside the

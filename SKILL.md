@@ -83,11 +83,10 @@ no longer in your context.
      "params": {"reasoning_effort": "high"}}
   ],
   "driver_position": "withheld",
-  "driver_prediction": "The cache invalidation path; a peer finding a deeper issue would change the plan.",
+  "driver_prediction": "Expect the cache invalidation path. A deeper structural flaw would change the plan.",
   "context_refs": ["docs/design.md"],
   "acceptance_criteria": ["Cite file:line for each concern"],
-  "out_of_scope": ["Do not propose a rewrite of the storage layer"],
-  "timeout_seconds": 1800
+  "out_of_scope": ["Do not propose a rewrite of the storage layer"]
 }
 ```
 
@@ -118,8 +117,9 @@ run. If you cannot write the acceptance criteria, consult first. Use `single`,
 `split` (a distinct `participant.task` each), `pipeline` (a declared artifact feeds
 the next stage), or `broadcast` for read-only alternatives only.
 
-Writers work in a linked git worktree, never the main checkout, so you can review
-the diff before integrating; concurrent writers need distinct worktrees. Let a
+Put each writer in its own linked git worktree, not the main checkout, so you can
+review its diff before integrating and your own edits cannot be swept into its
+commit. Let a
 Claude write peer run tests with `params.allowed_commands` (for example
 `["uv run pytest"]`); without it the shell is denied. Riff never grants commit,
 push, PR, messaging, or deployment authority implicitly.
@@ -137,8 +137,9 @@ python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
 `--run` commands are executed and their exit codes recorded; the result is derived
 from them, and a claimed `passed` that contradicts a failing command is rejected.
 `--check` records something you inspected as asserted, never as executed. Use
-`--result not_performed` when you checked nothing, and `--integrated` only after
-you actually changed files. Re-verifying keeps the earlier record.
+`--result not_performed` when you checked nothing, and `--integrated` only once you
+have actually applied the result (changed files, adopted the decision). Re-verifying
+keeps the earlier record.
 
 Report to the user in this shape, not as pasted peer output or a vote count:
 
@@ -157,7 +158,8 @@ Each of these happened in real runs (`NOTES.md`, September 2026 field review).
 
 - **A timeout is not a lost session.** Reply to the same participant with a short
   "write your final answer now"; all four field timeouts recovered that way, and a
-  failed turn does not spend a round. Set `timeout_seconds` for long delegations.
+  failed turn does not spend a round. The default turn timeout is 30 minutes; raise
+  `timeout_seconds` for long delegations.
 - **Usage-limit and auth failures do not heal on retry.** `error_type` `rate_limit`
   states the reset time; `auth` means fix credentials or pick another peer. Tell
   the user; never substitute your own review under the peer's name.

@@ -45,9 +45,11 @@ The coordinator makes fragile mechanics reproducible:
 - native start and resume;
 - Pi `agent_settled` handling;
 - parallel fan-out and sequential pipelines;
-- write-directory collision guards;
-- recursion limits; and
-- automatic privacy-conscious run records.
+- write-directory collision guards and request warnings;
+- recursion limits;
+- verification checks it executes itself; and
+- automatic privacy-conscious run records whose output tells the driver what to do
+  next, so the obligations survive even if the skill text leaves its context.
 
 See [the playbook](references/PLAYBOOK.md),
 [protocols](references/PROTOCOLS.md), [harness notes](references/HARNESSES.md),
@@ -144,8 +146,7 @@ For deterministic driver probes, the supported executable overrides are
       "provider": "llama.cpp",
       "model": "qwen",
       "cwd": "/absolute/project/path",
-      "tools": "read",
-      "params": {"thinking": "high"}
+      "tools": "read"
     }
   ],
   "coordination": {
@@ -178,8 +179,8 @@ python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
   --run "python3 -m unittest discover -s tests" --check "Read the diff" --integrated
 ```
 
-For long Pi/Qwen turns, start with a preallocated UUID using `run --run-id <uuid>`
-and inspect it from another shell:
+`run` prints the run ID on stderr before it blocks. For long Pi/Qwen turns, inspect
+the run from another shell:
 
 ```bash
 python3 scripts/riff.py progress --run-id <uuid> --participant qwen-local
