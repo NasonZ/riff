@@ -455,10 +455,10 @@ def request_warnings(request: RunRequest) -> list[dict[str, str]]:
             if isinstance(item, str)
         ]
         for reference in request.context_refs:
+            # A relative ref reaches the peer as-is, so it resolves against its cwd.
             path = Path(reference).expanduser()
-            if path.is_absolute() and not any(
-                path.resolve().is_relative_to(root) for root in readable
-            ):
+            resolved = (path if path.is_absolute() else Path(participant.cwd) / path).resolve()
+            if not any(resolved.is_relative_to(root) for root in readable):
                 warn(
                     "context-ref-outside-cwd",
                     f"{participant.id} cannot read {reference}: it is outside {participant.cwd}; "

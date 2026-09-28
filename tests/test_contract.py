@@ -288,6 +288,15 @@ class RequestWarningTests(unittest.TestCase):
                 context_refs=[reference],
             ),
         )
+        relative = f"../{outside.name}/spec.md"
+        self.assertIn(
+            "context-ref-outside-cwd",
+            self.codes(participants=[claude], context_refs=[relative]),
+        )
+        self.assertNotIn(
+            "context-ref-outside-cwd",
+            self.codes(participants=[claude], context_refs=["docs/design.md"]),
+        )
 
     def test_write_peer_in_a_main_checkout_is_flagged(self) -> None:
         (Path(self.cwd) / ".git").mkdir()
