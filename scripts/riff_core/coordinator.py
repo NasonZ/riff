@@ -9,7 +9,7 @@ import subprocess
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, replace
+from dataclasses import asdict, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -53,7 +53,17 @@ class Coordinator:
                 result[name] = adapter.capability()
             except (OSError, RuntimeError, ValueError) as error:
                 result[name] = {"harness": name, "available": False, "error": str(error)}
-        return {"schema_version": 1, "harnesses": result}
+        return {
+            "schema_version": 1,
+            # A driver once concluded the model could not be pinned because only the
+            # adapter-specific keys were listed; name the shared fields explicitly.
+            "participant_fields": [spec_field.name for spec_field in fields(ParticipantSpec)],
+            "note": (
+                "Every harness honours the participant fields model and provider; "
+                "each harness's 'parameters' are the extra keys it accepts inside params."
+            ),
+            "harnesses": result,
+        }
 
     def validate(self, request: RunRequest) -> RunRequest:
         """Validate shared and adapter-specific request semantics without launching."""
@@ -800,7 +810,8 @@ class Coordinator:
     def _public_result(
         self, run_id: str, results: list[SettledTurn]
     ) -> dict[str, Any]:
-        overall = self.store.read_manifest(run_id)["result"]
+        manifest = self.store.read_manifest(run_id)
+        overall = manifest["result"]
         participants = []
         notices = []
         for result in results:
@@ -831,6 +842,7 @@ class Coordinator:
                     "artifact_file": result.artifact_file,
                     "elapsed_ms": result.elapsed_ms,
                     "cost_usd": result.adapter_metadata.get("cost_usd"),
+                    "usage": result.usage,
                     "denied_tools": denied,
                     "error_type": result.error_type,
                     "error": result.error,
@@ -845,7 +857,14 @@ class Coordinator:
             "manifest_file": str(self.store.manifest_path(run_id)),
             "notices": notices,
             "participants": participants,
-            "next_steps": _next_steps(run_id, results, notices, self.script_invocation()),
+            "next_steps": _next_steps(
+                run_id,
+                results,
+                notices,
+                self.script_invocation(),
+                mode=manifest.get("mode"),
+                prediction=(manifest.get("request") or {}).get("driver_prediction"),
+            ),
         }
 
     def script_invocation(self) -> str:
@@ -922,7 +941,13 @@ def _process_alive(pid: Any) -> bool:
 
 
 def _next_steps(
-    run_id: str, results: list[SettledTurn], notices: list[dict[str, str]], script: str
+    run_id: str,
+    results: list[SettledTurn],
+    notices: list[dict[str, str]],
+    script: str,
+    *,
+    mode: str | None,
+    prediction: str | None,
 ) -> list[str]:
     """Driver obligations carried in the tool output itself, because the skill text
     can fall out of a driver's context after compaction (field evidence: recorded
@@ -953,14 +978,41 @@ def _next_steps(
                 f"{result.participant_id} failed authentication; fix that harness's "
                 "credentials or model configuration before retrying, and tell the user."
             )
-    steps.append(
-        "Verify decisive claims before relying on them, then record it: "
-        f"{script} verify --run-id {run_id} --verifier <driver> --run '<test command>' "
-        "--check '<what you inspected>' [--view-changed yes|no] [--integrated]; "
-        "or --result not_performed if you checked nothing. Never report a check you did "
-        "not run."
-    )
+    record = f"{script} verify --run-id {run_id} --verifier <driver>"
+    if not any(result.ok for result in results):
+        # Nothing came back to verify; the honest record says so.
+        steps.append(
+            "No peer produced an answer. After telling the user, record that: "
+            f"{record} --result not_performed --note '<what failed>'."
+        )
+        return steps
+    if mode == "delegate":
+        steps.append(
+            "Run the acceptance checks yourself before integrating, and record them: "
+            f"{record} --run '<acceptance command>' --check '<diff you reviewed>' "
+            "--integrated (only once you have applied the change)."
+        )
+    else:
+        # Consults rarely have a test to run; reading claims against the code or a
+        # source is a real check, recorded as asserted (field: drivers skipped the
+        # record when the only template offered was a test command).
+        steps.append(
+            "Check the decisive claims against the code or the cited sources, then "
+            f"record what you did: {record} --check '<what you read or compared>' "
+            "[--run '<command that confirms a claim>'] --view-changed yes|no."
+        )
+    if prediction:
+        steps.append(
+            f'Your recorded prediction was: "{_clip(prediction, 240)}". Tell the user '
+            "whether the peers changed it, and what did."
+        )
+    steps.append("Never tell the user something was verified unless a check ran.")
     return steps
+
+
+def _clip(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _derive_verification(executed: list[dict[str, Any]]) -> str | None:

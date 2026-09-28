@@ -39,7 +39,13 @@ The coordinator owns fragile mechanics:
 That last item matters more than it looks. A driver can lose the skill's text to
 context compaction mid-session; the coordinator's output is the one instruction
 surface it reads on every call, so obligations that must survive (read the
-artifact, verify, report denied access) travel there.
+artifact, verify, report denied access) travel there. They are derived from the run
+itself rather than generic: a delegation asks for acceptance checks and an
+integration record, a consult asks for the claims checked and whether the driver's
+recorded prediction changed (quoting it back), a failure names its recovery, and a
+run where no peer answered asks for an honest `not_performed`. A one-size template
+that always suggested a test command left consult drivers with nothing to record,
+and they recorded nothing.
 
 Adapters compile the common contract into native harness operations. Riff does not
 become another model provider registry, tool runtime, sandbox, or agent framework.

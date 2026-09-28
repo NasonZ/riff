@@ -138,7 +138,9 @@ python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
 
 `--run` commands are executed and their exit codes recorded; the result is derived
 from them, and a claimed `passed` that contradicts a failing command is rejected.
-`--check` records something you inspected as asserted, never as executed. Use
+`--check` records something you inspected as asserted, never as executed; for a
+consult, reading the peer's claims against the code or the cited sources is a real
+check, so record it rather than skipping the record because there was no test. Use
 `--result not_performed` when you checked nothing, and `--integrated` only once you
 have actually applied the result (changed files, adopted the decision). Re-verifying
 keeps the earlier record.

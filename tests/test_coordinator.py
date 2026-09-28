@@ -406,14 +406,37 @@ class CoordinatorTests(unittest.TestCase):
         store.write_participant(started["run_id"], "peer-0", state)
         self.assertTrue(self.coordinator.reply(started["run_id"], "peer-0", "Resume.")["ok"])
 
-    def test_output_carries_next_steps_and_unverified_runs(self) -> None:
+    def test_next_steps_fit_the_run_and_survive_without_the_skill(self) -> None:
         earlier = self.coordinator.run(self.request(participants=1))
         later = self.coordinator.run(self.request(participants=1))
         self.assertIn(earlier["run_id"], later["unverified_runs"])
         self.assertNotIn(later["run_id"], later["unverified_runs"])
-        steps = " ".join(later["next_steps"])
-        self.assertIn(f"verify --run-id {later['run_id']}", steps)
-        self.assertIn(f'--state-dir "{self.coordinator.store.root}"', steps)
+
+        def steps_for(mode: str, *, failing: bool = False, prediction: str | None = None) -> str:
+            adapter = FakeAdapter("fake", fail_ids={"peer-0"} if failing else set())
+            coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": adapter})
+            value = {
+                "version": 1, "mode": mode, "task": "Look at this.", "origin_harness": "codex",
+                "participants": [{"id": "peer-0", "harness": "fake", "cwd": str(self.cwd)}],
+                "driver_prediction": prediction,
+            }
+            result = coordinator.run(RunRequest.from_dict(value))
+            steps = " ".join(result["next_steps"])
+            # commands are pasteable against this store, not the default one
+            self.assertIn(f'--state-dir "{self.coordinator.store.root}" verify --run-id {result["run_id"]}', steps)
+            return steps
+
+        consult = steps_for("consult", prediction="The cache path is the weak point.")
+        self.assertIn("--view-changed", consult)
+        self.assertNotIn("--integrated", consult)
+        self.assertIn("The cache path is the weak point.", consult)
+
+        delegate = steps_for("delegate")
+        self.assertIn("--integrated", delegate)
+
+        failed = steps_for("consult", failing=True)
+        self.assertIn("--result not_performed", failed)
+        self.assertNotIn("--view-changed", failed)
 
     def test_timeout_next_step_resumes_the_same_session_with_a_longer_bound(self) -> None:
         class TimingOut(FakeAdapter):

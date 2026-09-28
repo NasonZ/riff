@@ -136,6 +136,7 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertIn("native-session", command)
         self.assertNotIn("--last", command)
         self.assertIn('model_reasoning_effort="xhigh"', command)
+        self.assertEqual(command[command.index("--model") + 1], "gpt-5")
 
     def test_pi_uses_rpc_settlement_and_explicit_session(self) -> None:
         command, _, session_id = PiAdapter().build_command(
@@ -151,8 +152,15 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--session-id") + 1], session_id)
         self.assertEqual(command[command.index("--thinking") + 1], "high")
         self.assertEqual(command[command.index("--tools") + 1], "read,grep,find,ls")
+        self.assertEqual(command[command.index("--model") + 1], "qwen")
+        self.assertEqual(command[command.index("--provider") + 1], "llama.cpp")
 
-    def test_hermes_rejects_write_until_permissions_are_enforceable(self) -> None:
+    def test_hermes_maps_model_and_rejects_write_until_enforceable(self) -> None:
+        command = HermesAdapter().build_command(
+            self.turn("hermes", tools="read", model="qwen", provider="custom")
+        )
+        self.assertEqual(command[command.index("--model") + 1], "qwen")
+        self.assertEqual(command[command.index("--provider") + 1], "custom")
         with self.assertRaisesRegex(ValidationError, "write delegation is disabled"):
             HermesAdapter().build_command(self.turn("hermes", tools="write"))
 

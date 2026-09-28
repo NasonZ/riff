@@ -494,7 +494,15 @@ What the measurement found and fixed:
   timeout, so an 8-second turn was retried twice at 8 seconds. The timeout next step
   now proposes a longer `--timeout-seconds`; the rerun recovered in one reply.
 
-Still open: three successful consults went unrecorded (drivers checked by reading
-but did not call `verify`); `view_changed` was set in 7 of 14 runs; one consult
-claimed `--integrated` with nothing applied. With one session per case per driver,
-these are observations, not rates.
+A second round closed the verification gaps. The verify next step had always
+offered a test command, which consults rarely have, so consult drivers recorded
+nothing. Next steps now derive from the run: consults are asked for the claims they
+checked and whether the quoted prediction changed; delegations for acceptance checks
+and integration; runs with no answer for `not_performed`. The five sessions that had
+left verification pending all recorded it on rerun, with `view_changed` set on every
+successful consult. The same round found `capabilities` misleading — a driver
+concluded the Codex model could not be pinned because only adapter-specific keys were
+listed — and it now names the shared participant fields.
+
+Still open: one consult claimed `--integrated` with nothing applied. With one session
+per case per driver, these are observations, not rates.
