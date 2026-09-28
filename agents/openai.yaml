@@ -1,0 +1,6 @@
+interface:
+  display_name: "Riff"
+  short_description: "Coordinate independent AI harness peers"
+  default_prompt: "Use $riff to get an independent peer review and synthesize the result."
+policy:
+  allow_implicit_invocation: true

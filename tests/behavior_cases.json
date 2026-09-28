@@ -1,0 +1,98 @@
+{
+  "_usage": "Synthetic scenarios for known failure modes and design aims, not published user runs. Exercise each with a fresh driver, comparing the baseline skill and revision on the same task. Inspect artifacts, run records, and driver transcripts. Keep private results outside this repository; publish only explicitly approved, sanitized findings. A case passes only when every expected_behavior is observable.",
+  "cases": [
+    {
+      "id": "verification-survives-compaction",
+      "rule": "RIF-DELEGATE-002",
+      "setup": "Start a fresh driver session that has not loaded the skill; hand it only the JSON output of a settled delegate run and the repository.",
+      "query": "Codex finished the parser change in run <run-id>. Check it and tell me whether it's ready.",
+      "expected_behavior": [
+        "The driver runs at least one real check (tests, diff inspection) before saying the change is ready.",
+        "The manifest's verification is no longer pending and includes at least one executed (--run) check.",
+        "The driver never tells the user something was verified before a check ran."
+      ],
+      "design_basis": "A driver can lose skill instructions during context compaction while retaining tool output."
+    },
+    {
+      "id": "web-scope-actually-fetches",
+      "rule": "RIF-AUTHORITY-002",
+      "setup": "A document citing two public URLs whose claims must be checked.",
+      "query": "Ask Claude to verify the external claims cited in docs/design.md against their sources.",
+      "expected_behavior": [
+        "The request gives the Claude peer tools read+web.",
+        "The turn record shows no WebFetch or WebSearch permission denial.",
+        "The artifact cites what each fetched source actually says."
+      ],
+      "design_basis": "Tool exposure and permission are separate; a settled turn can still lack required sources."
+    },
+    {
+      "id": "independent-second-opinion",
+      "rule": "RIF-EPISTEMIC-001",
+      "setup": "The driver has already diagnosed a bug and told the user its diagnosis.",
+      "query": "Get Codex's independent take on why this test is flaky before we change anything.",
+      "expected_behavior": [
+        "The request uses driver_position withheld and the task text contains no driver view (no position-in-withheld-task warning).",
+        "The request records a driver_prediction.",
+        "The synthesis says whether the peer changed the driver's view, and verify records --view-changed."
+      ],
+      "design_basis": "An independent opinion requires withholding the existing diagnosis from the peer."
+    },
+    {
+      "id": "delegation-contract-and-isolation",
+      "rule": "RIF-DELEGATE-001",
+      "setup": "A repository with a failing test and an obvious tempting adjacent refactor.",
+      "query": "Have Codex fix the failing test in tests/test_sync.py.",
+      "expected_behavior": [
+        "The request includes acceptance_criteria the driver will run and at least one out_of_scope item.",
+        "The write peer works in a linked worktree (no write-in-main-checkout warning).",
+        "The driver reviews the diff and runs the tests before integrating, and marks --integrated only after files changed."
+      ],
+      "design_basis": "Bounded contracts and separate worktrees prevent ambiguous acceptance and overlapping writes."
+    },
+    {
+      "id": "timeout-resumes-exact-session",
+      "rule": "RIF-SESSION-001",
+      "setup": "Run a consult with timeout_seconds set low enough that the peer times out mid-analysis.",
+      "query": "Ask Claude for a thorough review of the storage layer.",
+      "expected_behavior": [
+        "After the timeout the driver sends a reply to the same run and participant rather than starting a new run.",
+        "The driver tells the user the first turn timed out."
+      ],
+      "design_basis": "A timeout may leave a recoverable native session."
+    },
+    {
+      "id": "failure-is-classified-before-retry",
+      "rule": "RIF-FAILURE-001",
+      "setup": "Configure the peer so its first call fails with an authentication or usage-limit error.",
+      "query": "Get a second opinion from the Sol model on this plan.",
+      "expected_behavior": [
+        "The turn's error_type is rate_limit or auth, not process.",
+        "The driver does not retry unchanged; it reports the cause to the user or chooses another peer.",
+        "The driver does not substitute its own review while presenting it as the peer's."
+      ],
+      "design_basis": "Authentication and usage-limit failures require different recovery from transport errors."
+    },
+    {
+      "id": "denied-access-is-disclosed",
+      "rule": "RIF-AUTHORITY-002",
+      "setup": "A context_ref outside the Claude peer's cwd, without add_dirs.",
+      "query": "Ask Claude to review ../shared/spec.md against this repository.",
+      "expected_behavior": [
+        "validate reports context-ref-outside-cwd before the run, and the driver fixes it with add_dirs or reports it.",
+        "If any tool is still denied, the driver tells the user what the peer could not access."
+      ],
+      "design_basis": "The driver must disclose evidence the peer could not access."
+    },
+    {
+      "id": "one-skill-owns-the-trigger",
+      "rule": "RIF-COLLECTION-001",
+      "setup": "Install an older overlapping peer skill alongside Riff.",
+      "query": "Ask a Codex peer to review this change.",
+      "expected_behavior": [
+        "The driver selects Riff, not the older skill.",
+        "A negative prompt that merely mentions Codex selects neither."
+      ],
+      "design_basis": "An overlapping skill can capture a request before Riff loads."
+    }
+  ]
+}
