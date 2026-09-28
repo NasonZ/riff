@@ -124,6 +124,8 @@ Relevant mappings:
 
 Resume options differ from start options. In particular, a resumed session keeps
 its original working/sandbox context; do not mechanically replay every start flag.
+`codex exec resume` rejects `--sandbox`; when a resumed turn genuinely needs a
+different sandbox, override it with `-c 'sandbox_mode="workspace-write"'`.
 
 Historical recovery lesson (`RIF-SESSION-001`): Codex writes rollout files while a
 run is active. If a child dies before the event stream is captured:
@@ -141,7 +143,9 @@ thread ID remains authoritative.
 
 For long background CLI work, redirect stdout/stderr to a regular file. A pipeline
 such as `| tail` can kill an otherwise healthy orphaned producer with `SIGPIPE` when
-the invoking harness exits.
+the invoking harness exits, whereas a file-backed run survives a harness restart as
+an orphan and keeps working. That is why step 1 above checks for a live process
+before resuming anything.
 
 When Codex is the driver, its own sandbox also applies to `riff.py`. Under
 `workspace-write` the default state root (`~/.local/state/riff`) is outside the
