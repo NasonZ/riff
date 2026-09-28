@@ -210,6 +210,12 @@ supplies durable continuation records and may lag until an assistant/tool bounda
 Short content previews require an explicit flag. `run` prints its run ID on stderr
 before it blocks, so the run is addressable from a second shell at once; a
 preallocated `--run-id` remains available for callers that want to choose it.
+`run --detach` starts the coordinator in its own process group and returns at once,
+and `wait` blocks for a bounded time (nine minutes by default) before returning
+either the settled result or "still running". Measurement motivated this: a
+non-interactive Claude driver's tool pushed a long blocking `run` into the
+background, and the run died when the driver's session ended. Bounded foreground
+calls work under any harness's per-call limit.
 
 Participant mutations use per-participant advisory locks, run aggregates use a run
 lock, and JSON state is written through unique fsynced temporary files followed by

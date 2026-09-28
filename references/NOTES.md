@@ -464,3 +464,37 @@ dollars for non-Claude peers (Claude's `total_cost_usd` is now recorded); typed
 per-claim checklists that would help weaker drivers most; and the behavior cases in
 `tests/behavior_cases.json` have not yet been run with and without these changes, so
 the fixes are justified by observed failures but their effect is not yet measured.
+
+### September 2026 — behavior-case measurement
+
+The field review justified each change by an observed failure; this measured
+whether the changes work. Each case in `tests/behavior_cases.json` ran once per
+driver direction — Claude Sonnet driving GPT-6 Luna and Luna driving Sonnet — in
+isolated repositories and state directories. The before-arm is the field corpus,
+because the pre-refinement code was never committed and cannot be re-run. Full
+results: `~/riff-field-review-2026-09/measure/RESULTS.md`.
+
+All eight cases passed for both drivers, four of them only after a fix the
+measurement itself produced. Headline contrasts with the field: verification survived a
+driver that never loaded the skill (field: 0 of 45 after compaction); `read+web`
+fetched with zero denials (field: every fetch denied); zero tool denials in 19 turns;
+every failure classified; `out_of_scope` in 10 of 14 driver-built runs (field: 0 of
+121); `driver_prediction` in 14 of 14.
+
+What the measurement found and fixed:
+
+- **Long blocking runs died with non-interactive Claude drivers.** Claude Code's
+  shell pushed a many-minute `run` into the background, and `claude -p` killed it at
+  session end (2 of 2 first attempts). `run --detach` plus a bounded `wait` fixed it;
+  both reruns completed. This also answers the field's ad-hoc polling loops.
+- **An allowed-command prefix the peer never saw.** The driver allowed `python -m
+  unittest discover`; the peer ran `python3 -m unittest tests/...`, and every call was
+  denied. The peer prompt now lists the exact prefixes.
+- **Recovery under the bound that just expired.** Replies inherit the previous
+  timeout, so an 8-second turn was retried twice at 8 seconds. The timeout next step
+  now proposes a longer `--timeout-seconds`; the rerun recovered in one reply.
+
+Still open: three successful consults went unrecorded (drivers checked by reading
+but did not call `verify`); `view_changed` was set in 7 of 14 runs; one consult
+claimed `--integrated` with nothing applied. With one session per case per driver,
+these are observations, not rates.

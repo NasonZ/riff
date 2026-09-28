@@ -479,6 +479,56 @@ class CoordinatorTests(unittest.TestCase):
         turn = read_json(Path(state["turns"][0]))
         self.assertEqual(turn["request"]["checkout_at_settle"]["head"], at_dispatch["head"])
 
+    def test_wait_returns_the_settled_result_or_reports_running(self) -> None:
+        started = self.coordinator.run(self.request(participants=1))
+        waited = self.coordinator.wait(started["run_id"], timeout_seconds=1)
+        self.assertEqual(waited["status"], "settled")
+        self.assertEqual(waited["participants"][0]["artifact_file"], started["participants"][0]["artifact_file"])
+        self.assertTrue(waited["next_steps"])
+
+        store = self.coordinator.store
+        manifest = store.read_manifest(started["run_id"])
+        manifest["status"] = "running"
+        store.write_manifest(started["run_id"], manifest)
+        running = self.coordinator.wait(started["run_id"], timeout_seconds=1, poll_seconds=0.2)
+        self.assertEqual(running["status"], "running")
+        self.assertIn("wait --run-id", running["next_steps"][0])
+        with self.assertRaisesRegex(ValidationError, "unknown run id"):
+            self.coordinator.wait(str(uuid.uuid4()), timeout_seconds=1)
+
+    def test_timeout_recovery_suggests_a_longer_bound(self) -> None:
+        class TimingOut(FakeAdapter):
+            def _settle(self, turn: TurnRequest) -> SettledTurn:
+                settled = super()._settle(turn)
+                settled.status, settled.error_type = "failed", "timeout"
+                settled.error = "timed out after 8 seconds"
+                return settled
+
+        coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": TimingOut("fake")})
+        steps = " ".join(coordinator.run(self.request(participants=1))["next_steps"])
+        self.assertIn("--timeout-seconds 1800", steps)
+
+    def test_peer_is_told_the_exact_commands_it_may_run(self) -> None:
+        request = RunRequest.from_dict(
+            {
+                "version": 1,
+                "mode": "delegate",
+                "task": "Fix it.",
+                "origin_harness": "codex",
+                "participants": [
+                    {
+                        "id": "peer-0",
+                        "harness": "fake",
+                        "cwd": str(self.cwd),
+                        "tools": "write",
+                        "params": {"allowed_commands": ["python3 -m unittest"]},
+                    }
+                ],
+            }
+        )
+        self.coordinator.run(request)
+        self.assertIn("`python3 -m unittest`", self.fake.turns[0].prompt)
+
     def test_reverification_keeps_history(self) -> None:
         started = self.coordinator.run(self.request(participants=1))
         for outcome in ("partial", "passed"):

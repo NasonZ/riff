@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -48,6 +49,8 @@ def command_run(args: argparse.Namespace) -> dict[str, Any]:
     coordinator = _coordinator(args)
     coordinator.validate(request)
     run_id = args.run_id or str(uuid.uuid4())
+    if args.detach:
+        return _detach(coordinator, request, run_id)
     # Announce the run before blocking so a driver can inspect it from another call
     # instead of searching the state directory for the newest run.
     print(
@@ -62,6 +65,40 @@ def command_run(args: argparse.Namespace) -> dict[str, Any]:
         flush=True,
     )
     return coordinator.run(request, run_id=run_id)
+
+
+def _detach(coordinator: Coordinator, request: RunRequest, run_id: str) -> dict[str, Any]:
+    """Start the run in its own process group and return at once; follow it with wait."""
+    folder = coordinator.store.root / "detached"
+    folder.mkdir(parents=True, exist_ok=True)
+    request_file = folder / f"{run_id}.request.json"
+    request_file.write_text(json.dumps(request.to_dict()))
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--state-dir",
+        str(coordinator.store.root),
+        "run",
+        "--request",
+        str(request_file),
+        "--run-id",
+        run_id,
+    ]
+    with (folder / f"{run_id}.out").open("w") as out, (folder / f"{run_id}.err").open("w") as err:
+        process = subprocess.Popen(
+            command, stdout=out, stderr=err, stdin=subprocess.DEVNULL, start_new_session=True
+        )
+    (folder / f"{run_id}.pid").write_text(str(process.pid))
+    return {
+        "ok": True,
+        "run_id": run_id,
+        "status": "running",
+        "warnings": coordinator.warnings(request),
+        "next_steps": [
+            f"Follow it with {coordinator.script_invocation()} wait --run-id {run_id} "
+            "(returns within about nine minutes; call again while it reports running)."
+        ],
+    }
 
 
 def command_validate(args: argparse.Namespace) -> dict[str, Any]:
@@ -82,6 +119,10 @@ def command_reply(args: argparse.Namespace) -> dict[str, Any]:
         _read_prompt(args),
         timeout_seconds=args.timeout_seconds,
     )
+
+
+def command_wait(args: argparse.Namespace) -> dict[str, Any]:
+    return _coordinator(args).wait(args.run_id, timeout_seconds=args.timeout_seconds)
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
@@ -134,7 +175,18 @@ def build_parser() -> argparse.ArgumentParser:
     accept_state_dir(run)
     run.add_argument("--request", required=True, help="request JSON file, or - for stdin")
     run.add_argument("--run-id", help="optional preallocated canonical UUID")
+    run.add_argument(
+        "--detach",
+        action="store_true",
+        help="start the run in the background and return its id; follow with wait",
+    )
     run.set_defaults(handler=command_run)
+
+    wait = commands.add_parser("wait", help="block until a run settles, within a bound")
+    accept_state_dir(wait)
+    wait.add_argument("--run-id", required=True)
+    wait.add_argument("--timeout-seconds", type=int, default=540)
+    wait.set_defaults(handler=command_wait)
 
     validate = commands.add_parser("validate", help="validate and normalize a request")
     accept_state_dir(validate)

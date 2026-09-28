@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 import uuid
@@ -29,6 +30,7 @@ RIFF_SCRIPT = Path(__file__).resolve().parent.parent / "riff.py"
 UNVERIFIED_LOOKBACK_SECONDS = 7 * 24 * 3600
 UNVERIFIED_LIMIT = 5
 VERIFY_OUTPUT_TAIL_CHARS = 2000  # enough to show a failing assertion without copying a whole log
+DEFAULT_WAIT_SECONDS = 540  # under the ~10 min per-call limit common to agent shells
 ATTEMPT_FACTOR = 2  # failed turns allowed per round before a participant is considered broken
 
 
@@ -256,6 +258,69 @@ class Coordinator:
             for participant_id in manifest["participants"]
         }
         return {"manifest": manifest, "participant_state": participants}
+
+    def wait(
+        self,
+        run_id: str,
+        *,
+        timeout_seconds: int = DEFAULT_WAIT_SECONDS,
+        poll_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Block until a run settles or the bound passes, whichever is first.
+
+        The bound sits under common agent tool-call limits, so a driver that cannot
+        keep a background task alive (a non-interactive session) can follow a long
+        run through repeated bounded calls instead of losing it."""
+        if not 1 <= timeout_seconds <= 3600:
+            raise ValidationError("wait timeout must be between 1 and 3600 seconds")
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            state = self._settled_state(run_id)
+            if state == "settled":
+                return self.result(run_id)
+            if state == "failed-to-start" or time.monotonic() >= deadline:
+                break
+            time.sleep(poll_seconds)
+        if state == "failed-to-start":
+            detached = self.store.root / "detached" / f"{run_id}.err"
+            raise ValidationError(
+                f"run {run_id} never started: "
+                + (detached.read_text()[-2000:] if detached.is_file() else "no run record")
+            )
+        return {
+            "ok": False,
+            "run_id": run_id,
+            "status": "running",
+            "next_steps": [
+                f"Still running; call {self.script_invocation()} wait --run-id {run_id} again."
+            ],
+        }
+
+    def result(self, run_id: str) -> dict[str, Any]:
+        """Rebuild the public result of a settled run from its latest turn records."""
+        manifest = self.store.read_manifest(run_id)
+        latest: list[SettledTurn] = []
+        for participant_id in manifest["participants"]:
+            turns = self.store.read_participant(run_id, participant_id).get("turns") or []
+            if turns:
+                execution = json.loads(Path(turns[-1]).read_text())["execution"]
+                latest.append(SettledTurn(**execution))
+        public = self._public_result(run_id, latest)
+        public["status"] = manifest.get("status")
+        public["warnings"] = manifest.get("warnings") or []
+        return public
+
+    def _settled_state(self, run_id: str) -> str:
+        if not self.store.manifest_path(run_id).is_file():
+            detached = self.store.root / "detached" / f"{run_id}.err"
+            pid_file = self.store.root / "detached" / f"{run_id}.pid"
+            if pid_file.is_file() and not _process_alive(int(pid_file.read_text() or 0)):
+                return "failed-to-start"
+            if not pid_file.is_file() and not detached.is_file():
+                raise ValidationError(f"unknown run id: {run_id}")
+            return "starting"
+        manifest = self.store.read_manifest(run_id)
+        return "settled" if manifest.get("status") in {"settled", "failed"} else "running"
 
     def progress(
         self,
@@ -663,11 +728,20 @@ class Coordinator:
                 "Acceptance criteria\n"
                 + "\n".join(f"- {item}" for item in request.acceptance_criteria)
             )
-        parts.append(
-            "Authority\n"
+        authority = (
             f"Tool scope is {participant.tools}. Do not exceed it. "
             "Do not invoke Riff or another agent."
         )
+        commands = participant.params.get("allowed_commands") or []
+        if commands:
+            # The permission rule matches by prefix, so the peer must know the exact
+            # spelling (field: a peer ran python3 where python was allowed).
+            authority += (
+                " The only shell commands you may run are those beginning with: "
+                + "; ".join(f"`{command}`" for command in commands)
+                + ". Run them exactly as written, without cd, pipes, or chaining."
+            )
+        parts.append("Authority\n" + authority)
         parts.append(
             "Response\nReturn a self-contained artifact. Give each material claim its "
             "evidence (file:line, command and result, or source URL), or label it "
@@ -857,9 +931,15 @@ def _next_steps(
     steps.extend(notice["message"] for notice in notices)
     for result in results:
         if result.error_type == "timeout" and result.native_session_id:
+            # A reply inherits the previous timeout; recovering under the same bound
+            # that just expired fails again (field: two 8 s replies after an 8 s timeout).
+            match = re.search(r"after (\d+) seconds", result.error or "")
+            previous = int(match.group(1)) if match else DEFAULT_TIMEOUT_SECONDS
+            longer = max(DEFAULT_TIMEOUT_SECONDS, 2 * previous)
             steps.append(
                 f"{result.participant_id} timed out but its session survives: {script} reply "
-                f"--run-id {run_id} --participant {result.participant_id} --prompt "
+                f"--run-id {run_id} --participant {result.participant_id} "
+                f"--timeout-seconds {min(longer, 86400)} --prompt "
                 "'Stop exploring and write your final answer now.' (failed turns do not "
                 "spend max_rounds)"
             )

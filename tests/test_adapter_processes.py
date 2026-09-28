@@ -141,6 +141,44 @@ class AdapterProcessTests(unittest.TestCase):
         self.assertEqual(Path(result.artifact_file).read_text(), "")
         self.assertEqual(result.adapter_metadata["cost_usd"], 0)
 
+    def test_cli_detach_then_wait_follows_a_real_process(self) -> None:
+        import json
+        import subprocess
+        import sys
+
+        fake = self.executable(
+            "slow-claude",
+            """
+            import json, sys, time
+            args = sys.argv[1:]
+            sys.stdin.read()
+            time.sleep(2)
+            print(json.dumps({'result': 'detached artifact',
+                              'session_id': args[args.index('--session-id') + 1]}))
+            """,
+        )
+        script = str(Path(__file__).resolve().parent.parent / "scripts" / "riff.py")
+        request = self.root / "request.json"
+        request.write_text(json.dumps({
+            "version": 1, "mode": "consult", "task": "Review.", "origin_harness": "codex",
+            "participants": [{"id": "claude-a", "harness": "claude", "cwd": str(self.cwd), "tools": "read"}],
+            "driver_prediction": "Nothing surprising.",
+        }))
+        env = {**os.environ, "RIFF_CLAUDE_BIN": fake}
+        state = str(self.root / "state")
+
+        def riff(*args):
+            done = subprocess.run([sys.executable, script, "--state-dir", state, *args],
+                                  capture_output=True, text=True, env=env, timeout=60)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            return json.loads(done.stdout)
+
+        detached = riff("run", "--request", str(request), "--detach")
+        self.assertEqual(detached["status"], "running")
+        waited = riff("wait", "--run-id", detached["run_id"], "--timeout-seconds", "30")
+        self.assertEqual(waited["status"], "settled")
+        self.assertEqual(Path(waited["participants"][0]["artifact_file"]).read_text(), "detached artifact")
+
     def test_codex_auth_failure_is_classified(self) -> None:
         fake = self.executable(
             "unauthorized-codex",

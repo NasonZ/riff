@@ -127,10 +127,11 @@ If a task would duplicate writes across participants and no dispatch shape is
 clear, stop before launching and clarify the decomposition.
 
 A run blocks the caller until every participant settles, but prints its run ID on
-stderr as soon as it starts. Wait on it for short work. For long work, background it
-with output redirected to a file and inspect it with `progress --run-id`, but only
-when the driver has genuinely independent work to do; backgrounding has a
-bookkeeping cost.
+stderr as soon as it starts. Wait on it for short work. For long work, or whenever
+the driver's shell caps a single call, use `run --detach` and follow with bounded
+`wait --run-id` calls; the detached run survives the driver's session, and `wait`
+returns the same result JSON, next steps included. Do independent work in between
+only when there is some; polling has a cost.
 
 Expect delegation to take two turns: a first delivery, then a tightening pass
 through the same native session.

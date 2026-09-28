@@ -179,8 +179,10 @@ python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
   --run "python3 -m unittest discover -s tests" --check "Read the diff" --integrated
 ```
 
-`run` prints the run ID on stderr before it blocks. For long Pi/Qwen turns, inspect
-the run from another shell:
+`run` prints the run ID on stderr before it blocks. For long runs, or a driver whose
+shell caps one call's duration, use `run --detach` and then `wait --run-id <uuid>`
+(bounded; call again while it reports running). For long Pi/Qwen turns, inspect the
+run from another shell:
 
 ```bash
 python3 scripts/riff.py progress --run-id <uuid> --participant qwen-local

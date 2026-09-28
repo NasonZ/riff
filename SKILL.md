@@ -68,9 +68,11 @@ python3 "$RIFF_ROOT/scripts/riff.py" run --request request.json
 ```
 
 Fix what `validate` warns about before an expensive run; each warning names the
-remedy. `run` prints a `started` line with the run ID on stderr before it blocks,
-and its final JSON carries `next_steps` — follow them even if these instructions are
-no longer in your context.
+remedy. `run` blocks until every peer settles, which can take many minutes, then
+returns JSON whose `next_steps` you should follow even if these instructions are no
+longer in your context. If your shell limits how long one call may run, start with
+`run --detach` and follow with `wait --run-id <id>`, which returns within about nine
+minutes; call it again while it reports `running`.
 
 ```json
 {
@@ -171,5 +173,8 @@ Each of these happened in real runs (`NOTES.md`, September 2026 field review).
 - **An older overlapping skill** (for example a legacy `codex` skill) can capture
   the trigger before Riff loads; see `README.md` for migration.
 - **A sandboxed Codex cannot commit from a linked worktree**; the driver commits.
-- **Background runs:** redirect output to a file; piping to `tail` can kill the
-  child with SIGPIPE when the invoking shell exits.
+- **A backgrounded run can die with your session.** A driver whose tool pushed a
+  long `run` into the background, then finished its turn in a non-interactive
+  session, lost the run entirely. Use `run --detach` plus `wait`: the detached run
+  survives, and `wait` picks it up. Never pipe riff output to `tail`; SIGPIPE can
+  kill it when the invoking shell exits.
