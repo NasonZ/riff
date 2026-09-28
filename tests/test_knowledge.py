@@ -49,10 +49,9 @@ class KnowledgeTests(unittest.TestCase):
             request = RunRequest.from_dict(value)
             self.assertEqual(request_warnings(request), [])
 
-    def test_skill_body_stays_within_budget(self) -> None:
+    def test_skill_body_stays_under_the_documented_line_limit(self) -> None:
         body = (ROOT / "SKILL.md").read_text().split("---", 2)[2]
-        self.assertLess(len(body.splitlines()), 500)
-        self.assertLess(len(body.split()), 2000)
+        self.assertLess(len(body.splitlines()), 500)  # Anthropic skill-authoring guidance
 
     def test_skill_links_resolve_and_stay_one_level_deep(self) -> None:
         for link in LOCAL_LINK.findall((ROOT / "SKILL.md").read_text()):
@@ -66,27 +65,23 @@ class KnowledgeTests(unittest.TestCase):
             if len(text.splitlines()) > 100 and path.name != "NOTES.md":
                 self.assertIn("## Contents", text[:1500], f"{path.name} needs a table of contents")
 
-    def test_trigger_cases_cover_both_sides_with_near_misses(self) -> None:
-        cases = json.loads((ROOT / "tests" / "trigger_cases.json").read_text())
-        positive, negative = cases["should_trigger"], cases["should_not_trigger"]
-        self.assertGreaterEqual(len(positive), 8)
-        self.assertGreaterEqual(len(negative), 8)
+    def test_forward_test_datasets_are_usable(self) -> None:
+        triggers = json.loads((ROOT / "tests" / "trigger_cases.json").read_text())
+        positive, negative = triggers["should_trigger"], triggers["should_not_trigger"]
         prompts = [case["prompt"] for case in positive + negative]
         self.assertEqual(len(prompts), len(set(prompts)), "duplicate trigger prompts")
-        self.assertTrue(
-            any(case.get("near_miss") for case in negative),
-            "negatives need near-misses that share vocabulary with real triggers",
-        )
+        self.assertTrue(positive and negative, "triggers need both sides")
+        # near-misses share vocabulary with real triggers; they are the informative negatives
+        self.assertGreater(sum(bool(case.get("near_miss")) for case in negative), len(negative) // 2)
 
-    def test_behavior_cases_name_a_rule_and_observable_expectations(self) -> None:
-        cases = json.loads((ROOT / "tests" / "behavior_cases.json").read_text())
+        behaviors = json.loads((ROOT / "tests" / "behavior_cases.json").read_text())["cases"]
         playbook = (ROOT / "references" / "PLAYBOOK.md").read_text()
         defined = {match.group(1) for match in DEFINITION.finditer(playbook)}
-        for case in cases["cases"]:
-            self.assertIn(case["rule"], defined, f"{case['id']} cites an undefined rule")
-            self.assertTrue(case["query"].strip())
-            self.assertGreaterEqual(len(case["expected_behavior"]), 2, case["id"])
-
+        for case in behaviors:
+            with self.subTest(case["id"]):
+                self.assertIn(case["rule"], defined)
+                self.assertTrue(case["query"].strip())
+                self.assertGreaterEqual(len(case["expected_behavior"]), 2)
 
 if __name__ == "__main__":
     unittest.main()

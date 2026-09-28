@@ -68,6 +68,7 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--model") + 1], "sonnet")
         self.assertEqual(command[command.index("--effort") + 1], "high")
         self.assertEqual(command[command.index("--tools") + 1], "Read,Grep,Glob")
+        self.assertNotIn("--allowedTools", command)  # read tools need no pre-approval
 
     def test_claude_read_plus_web_scope_adds_and_preapproves_web_tools_only(self) -> None:
         command, _, _ = ClaudeAdapter().build_command(
@@ -80,10 +81,6 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--permission-mode") + 1], "dontAsk")
         # dontAsk denies an available tool unless it is pre-approved.
         self.assertEqual(command[command.index("--allowedTools") + 1], "WebSearch,WebFetch")
-
-    def test_claude_read_scope_preapproves_nothing(self) -> None:
-        command, _, _ = ClaudeAdapter().build_command(self.turn("claude", tools="read"))
-        self.assertNotIn("--allowedTools", command)
 
     def test_claude_write_peer_may_run_only_listed_command_prefixes(self) -> None:
         command, _, _ = ClaudeAdapter().build_command(
