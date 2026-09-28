@@ -1,0 +1,27 @@
+{
+  "_usage": "Forward-test the skill description with fresh agent sessions, not the model that wrote it. Run each prompt three times per driver harness; a trigger counts when the driver loads Riff before acting. Near-misses share vocabulary with real triggers but need solo work, and are the most informative negatives. Hold some cases out when tuning the description.",
+  "should_trigger": [
+    {"prompt": "Ask Codex for an independent review of this plan."},
+    {"prompt": "Discuss this design with Claude and Qwen before deciding."},
+    {"prompt": "Delegate these two read-only investigations to Pi and Codex."},
+    {"prompt": "Use two Pi instances with different thinking levels and compare them."},
+    {"prompt": "Get another model's second opinion on this diagnosis."},
+    {"prompt": "Have Hermes challenge the framing, then ask Codex to critique its answer."},
+    {"prompt": "Before I commit to this schema, run it past GPT and tell me where it disagrees with you."},
+    {"prompt": "Hand the flaky-test investigation in tests/test_sync.py to Codex in a worktree and review what it changes."},
+    {"prompt": "Have the local qwen model sanity-check this migration script; it doesn't need web access."},
+    {"prompt": "I want a cross-model roundtable on whether we should rename the package, three rounds max."}
+  ],
+  "should_not_trigger": [
+    {"prompt": "Review this code for bugs.", "near_miss": true},
+    {"prompt": "Explain how the Codex CLI stores sessions.", "near_miss": true},
+    {"prompt": "I delegated the deployment to a colleague.", "near_miss": true},
+    {"prompt": "The team is debating REST versus gRPC.", "near_miss": true},
+    {"prompt": "Install Pi on this machine."},
+    {"prompt": "Compare the documented features of Claude Code and Codex yourself.", "near_miss": true},
+    {"prompt": "Summarize the transcript of yesterday's debate between the two models in notes/debate.md.", "near_miss": true},
+    {"prompt": "Write a skill that lets Claude call Codex.", "near_miss": true},
+    {"prompt": "Why did my codex exec resume --last pick the wrong thread?", "near_miss": true},
+    {"prompt": "Get a second pair of eyes on this function's naming — what would you call it?", "near_miss": true}
+  ]
+}

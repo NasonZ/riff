@@ -1,8 +1,14 @@
-# Codex skill — build notes
+# Riff field and build notes
 
-These notes preserve the build log for riff: what I asked for, what Claude Code drafted, where Codex pushed back, and what changed as a result. Companion to `./DESIGN.md` (the reference) and `../SKILL.md` (the operational guidance to Claude).
+These notes preserve Riff's evidence trail: the original Claude→Codex skill, the
+questions that shaped it, peer and user corrections, failed approaches, research,
+and the later driver-neutral refactor. They complement
+[the design](DESIGN.md), [the playbook](PLAYBOOK.md), and
+[the operational skill](../SKILL.md).
 
-Longer than DESIGN.md because the design changed several times based on what didn't work, and the record of what didn't work matters — both for me and for anyone building similar cross-model skills.
+This file is intentionally longer than the operational documents. The design
+changed several times because real use contradicted a clean-looking abstraction;
+preserving those contradictions is how future changes avoid repeating them.
 
 ## Starting point
 
@@ -200,3 +206,261 @@ Used during this build:
 - [Langfuse — OpenTelemetry for LLM Observability](https://langfuse.com/integrations/native/opentelemetry)
 - [Codex CLI docs (exec, mcp-server)](https://developers.openai.com/codex/cli)
 - Codex (GPT-5.x) — via the skill, in this very session
+
+## August 2026 — from dyad to driver-neutral Riff
+
+The next design question was whether the collaboration shape could work from
+Claude Code, Codex, Pi, or Hermes; target one or several peers; and launch several
+instances of the same harness with different model or reasoning settings. The first
+temptation was to replace the long skill with a generic runner and a very small set
+of instructions. The user correctly pushed back: the accumulated know-how is the
+valuable part of Riff and should not be destroyed to make the hot file small.
+
+That correction produced a layered design:
+
+- `SKILL.md` is the compact operating constitution.
+- `PLAYBOOK.md` preserves durable epistemic and delegation judgment.
+- `PROTOCOLS.md` preserves mode-specific workflows and stopping behavior.
+- `HARNESSES.md` isolates volatile CLI and session knowledge.
+- the coordinator makes fragile mechanics executable;
+- focused tests protect the invariants; and
+- this file continues to preserve field history, failed approaches, and sources.
+
+The original Qwen peer runner supplied the first proven adapter mechanics: Pi RPC,
+explicit sessions, `agent_settled`, artifact handoff, and isolated state. Those were
+generalized rather than discarded. The original Riff supplied independent-first,
+mutuality, reframing, persona restraint, persuasion awareness, delegation contracts,
+verification, and context hygiene. Each was retained in the hot skill, playbook,
+protocol, code, or tests according to how universal and mechanical it is.
+
+### Corrections to the v1 evaluation approach
+
+The v1 notes above accurately record what was built, but later inspection showed
+that “the infrastructure works” was too generous:
+
+- eleven of twelve cases had no fixture and therefore skipped;
+- the single fixture was hand-authored;
+- the assertion interpreter silently ignored most of the interesting assertions;
+- the skill required a trace that no deterministic runner emitted; and
+- the schema could represent only one Codex peer and one transport.
+
+The refactor replaces that suite with standard-library tests over the request
+contract, coordinator, and fake harness processes. No checked-in case is considered
+passing because it was skipped. A small trigger dataset remains separate for fresh
+agent forward-testing.
+
+### Topology decision
+
+“Full mesh” now means any supported harness can be the current driver and can invoke
+any supported participant. Peers do not establish direct N² connections. The shared
+coordinator mediates sessions and later rounds, which prevents recursive councils
+and keeps authority, provenance, and synthesis visible.
+
+### Protocol decision
+
+The July 2026 MCP changes reinforced explicit handles and stateless coordination,
+but Riff does not require MCP. Native local adapters are the dependable first layer.
+The internal run/session/artifact model can later be exposed through MCP Tasks or
+A2A without changing skill behavior.
+
+### Live self-audit and trace observability
+
+The first parallel self-audit used Claude Code and the local Qwen model through Pi.
+Claude settled normally. Qwen exceeded the coordinator's ten-minute turn timeout,
+but its Pi session already contained dozens of structured message, thinking, and
+tool-result records. Resuming that exact session with a short “stop inspecting and
+synthesize” prompt recovered a complete audit without rerunning the analysis.
+
+This exposed an important observability distinction: process settlement, model
+activity, and session recoverability are separate facts. File growth alone is a
+weak progress signal when Pi already provides a structured live trace. Riff now
+offers metadata-first Pi progress inspection and preserves failed native session
+handles for exact-session recovery.
+
+The two audits also found concrete coordinator defects: path-unsafe IDs, reply
+races, adapter exceptions escaping pipeline/reply settlement, partial results being
+overwritten by a successful follow-up, fabricated verification success with no
+checks, Pi stderr backpressure, non-unique atomic temp names, and authority
+degradation hidden from the compact result. Each finding became a code invariant
+and focused regression test rather than another aspirational eval case.
+
+### Driver-side forward probes
+
+Adapter smoke tests prove that the coordinator can launch a peer; they do not prove
+that each proposed driver can discover the skill, translate its instructions into a
+request, and execute the coordinator. A later completion audit therefore used a
+deterministic Codex-shaped probe process and real fresh driver sessions:
+
+- Claude Code invoked its `Skill` tool for `riff`, validated the request, launched
+  the probe, and read the artifact.
+- Pi, backed by the local Qwen model, discovered and read the global Agent Skill,
+  then performed the same flow.
+- Hermes loaded Riff from its configured trusted external skill directory and
+  completed the flow.
+- Codex started from a neutral non-repository directory, resolved the global Riff
+  skill, and completed the flow. This also exercised another Codex instance as a
+  participant shape.
+
+The probe deliberately removed nested model quality and cost from the test while
+leaving skill discovery, request construction, process launch, parsing, state, and
+artifact handoff real.
+
+This test found a defect that unit and earlier live happy paths had missed. During
+the Pi run, Qwen replaced the supplied probe with a similar fake that emitted
+`thread.started` and an artifact but no `turn.completed`. The Codex adapter accepted
+it. That meant an incomplete or truncated Codex JSONL stream could masquerade as a
+settled turn. Riff now requires the native settlement event, retains a thread ID
+seen before timeout, records Codex usage, and has a regression test for both the
+incomplete-stream and timeout cases.
+
+The forward probes also showed that agents naturally placed the global
+`--state-dir` option after the subcommand. The CLI now accepts and documents both
+orders. This is a useful field lesson: a mechanically valid interface can still be
+agent-hostile when its option placement conflicts with the command grammar models
+have learned from most CLIs.
+
+### Trigger-collision migration audit
+
+A fresh Claude Code negative probe that merely asked how Codex stores sessions did
+not invoke Riff. The first implicit positive probe—“ask a Codex peer”—did invoke a
+skill, but selected the installed legacy `codex` skill rather than Riff. Instructions
+inside Riff could not repair that outcome because skill selection had already
+happened.
+
+The migration therefore preserved the old Claude skill while setting
+`disable-model-invocation: true`, disabled Hermes' overlapping builtin `codex`
+skill, and moved the old standalone `qwen-peer` directory to a recoverable archive
+outside scanned roots. A fresh implicit positive probe then selected `riff`, read
+the playbook, constructed a versioned request, and ran the coordinator. The old
+skills were not deleted, so explicit rollback remains possible.
+
+That retest uncovered a second interface lesson. The probe asked the driver to use
+an isolated fake executable, but the driver guessed `CODEX_PATH` and
+`RIFF_STATE_HOME` instead of Riff's real `RIFF_CODEX_BIN` and `RIFF_STATE_DIR`
+seams. It consequently launched the installed Codex in read-only mode. The genuine
+turn still settled correctly—with an explicit thread ID, `turn.completed`, usage,
+native-sandbox authority, and a hashed artifact—but a deterministic probe should
+never depend on guessed environment names. The supported override names are now
+documented in `HARNESSES.md`.
+
+The legacy Claude skill also had a connected user-level Codex MCP server. Disabling
+model invocation on the skill did not disable those raw MCP tools, so the MCP
+definition was archived and temporarily removed for a clean test. In a fresh
+MCP-absent Claude session, Claude selected Riff, validated a request, invoked the
+coordinator against a deterministic Codex-shaped process, read the artifact, and
+reported the run's limitations accurately. The turn settled on `turn.completed`
+with the expected explicit session handle. This isolates and proves the
+Claude→Riff→adapter path without claiming that a stub validates model quality.
+
+### September 2026 — the `read+web` scope gap (RIF-AUTHORITY-002)
+
+Field evidence from the agex `telem_refresh.md` consult (run
+`e1cb9833-5da4-4a3d-8637-cf4dea34ef58`): the task explicitly required web
+verification of cited GitHub claims, but the only usable scope was `read`
+(`--tools Read,Grep,Glob`), which excludes `WebSearch`/`WebFetch` by
+construction. The peer's six fetch attempts were all permission-denied. The
+peer handled the gap well — it disclosed the tool limitation in section 0 of
+its artifact and fell back to the repo's own pinned source inspection — and
+the driver closed the two remaining unverified claims via the GitHub API.
+The synthesis stayed honest because the permission boundary was visible in
+the artifact, but the acceptance criterion was still unmet by the participant
+itself.
+
+Lessons:
+
+- **Scope must match the task's acceptance criteria, not just its risk.**
+  A review that must verify external citations needs web access; declaring
+  `read` silently converts a verifiable task into an unverifiable one.
+- **A missing scope is a Riff defect, not a driver workaround.** The fix was
+  a fourth shared scope value `read+web` (read-only file access plus outbound
+  network fetch; no write/shell/edit), enforced natively by the Claude Code
+  `--tools` allowlist (`Read,Grep,Glob,WebSearch,WebFetch`,
+  `--permission-mode dontAsk`). Codex, Pi, and Hermes adapters fail closed
+  with a clear validation error until they gain native enforcement. Contract
+  change: `models.py` `Tools` literal and participant validation; capability
+  reporting now advertises per-harness `tool_scopes`, so drivers should check
+  `capabilities` before requesting a scope.
+- **Related identifier:** RIF-AUTHORITY-001 (do not expand authority
+  implicitly) still governs; `read+web` is a *narrower* expansion than
+  `write`, and only where the native harness can enforce the boundary.
+
+### September 2026 — field review of 127 runs
+
+The first measurement of Riff in real use rather than in probes, following the
+test–measure–refine method of Anthropic's skill-creator work: characterize real
+behavior before changing the skill, and justify each change by an observed failure.
+Corpus: every run under the state root from 2026-08-15 to 2026-09-28 (127 runs, 190
+turns, about 27 peer-hours), 121 linked to driver transcripts by run ID. Pairings:
+Claude→Codex 60, Codex→Claude 58, one Claude→(Codex + Pi/Qwen 3.8 27B) broadcast, and
+two runs driven by Pi on the local Qwen 3.8 27B. A stratified sample of 44 runs was
+reviewed against a fixed rubric (trigger, request quality, peer output, driver
+handling, verification record against the transcript, outcome, friction) by four
+independent reviewers. Evidence and per-run reviews live outside the repository in
+`~/riff-field-review-2026-09/`.
+
+What worked:
+
+- Peer quality was high wherever a peer ran: almost every artifact cited file:line
+  evidence, most reframed the question, and in 11 of 11 Codex-driven consults the
+  driver acted on the findings (8 with new regression tests). Spot-checked citations
+  were exact. Independent-first consults were the highest-value runs.
+- Exact-session recovery works: all four timed-out turns were recovered by a reply.
+- Drivers usually did verify in practice, and those checks caught real peer defects
+  (a JSON-schema form OpenAI strict mode rejects, a cache lookback error, missing
+  rules in a prompt, statistics pooled across two models). Where Codex drivers
+  recorded verification, the record matched the transcript every time.
+- Qwen 3.8 27B worked both ways. As a peer on an identical prompt it matched Codex
+  on substance at about a tenth of the tokens and four times the latency, and more
+  of the shipped fixes originated with it than with Codex; it missed one bypass
+  Codex found. As a driver it followed the playbook, synthesized, changed its view
+  on three points, and checked claims itself. Its errors were the characteristic
+  small-model ones: a tool scope that did not match the task, a verification record
+  that overstated its checks, and claimed continuity it did not have.
+
+What failed, and what changed:
+
+- **The skill fell out of context.** Claude drivers recorded verification in 7 of
+  61 runs against 52 of 58 for Codex drivers. 50 of those Claude runs came from one
+  session: 3 of 5 recorded before an auto-compaction, 0 of 45 after, because only
+  another skill was re-attached. Later the driver told the user rendered figures had
+  "never been viewed" when it had approved them. Change: obligations now travel in
+  the tool output (`next_steps` with the exact `riff.py` path, `unverified_runs`),
+  which survives compaction where skill text does not (`RIF-DELEGATE-002`).
+- **Verification was the driver's word.** Change: `verify --run` executes checks and
+  records exit codes; `--check` is labelled asserted; re-verifying keeps history
+  instead of overwriting an earlier negative check.
+- **Scopes silently failed.** Every `read+web` WebFetch/WebSearch was denied, write
+  peers could not run a single test, and inputs outside a Claude peer's cwd were
+  unreadable, while the runs reported success. `--tools` only exposes a tool; under
+  `dontAsk`/`acceptEdits` it also needs `--allowedTools` (confirmed with a live probe
+  against a domain absent from the user's allowlist). Change: `read+web`
+  pre-approves web tools; `add_dirs` and `allowed_commands` adapter params; denied
+  tools surface in run output; `validate` warns on a web task without web scope and
+  on context files outside a Claude peer's cwd (`RIF-AUTHORITY-002`).
+- **Failures were mislabelled and retried.** Three 429 session limits surfaced as
+  "claude exited with status 1" although the JSON said why and when it resets; three
+  401s were retried unchanged. Change: `rate_limit`/`auth` classification from the
+  payload and error text, with next steps that say not to retry (`RIF-FAILURE-001`).
+- **Recovery cost rounds.** A timeout consumed a round and blocked a real
+  disagreement round. Change: only settled turns spend `max_rounds`; attempts are
+  capped at twice the budget. The default turn timeout is 1800 s (Codex peers: median
+  11 min, p90 31 min).
+- **Contracts were thin.** `out_of_scope` was empty in 121 of 121 runs; 21 of 36
+  delegations lacked acceptance criteria; none of 8 Claude-driven write delegations
+  used a worktree, and one driver commit swept in unfinished peer edits. Change:
+  `validate` warnings for each, including `write-in-main-checkout`; the SKILL.md
+  example now carries every contract field and is tested to validate warning-free.
+- **Mechanics were agent-hostile.** `run` printed nothing until it settled, so
+  drivers hunted for run IDs with `ls -t` and wrote polling loops; `driver_position`
+  errors failed validation ten times in the sample; `independent_first` stayed true beside a
+  provided position; a reply to a running turn failed unnoticed. Change: a `started`
+  event on stderr; errors that name the remedy; `independent_first` derived from a
+  provided position; replies refused while a turn is live and allowed once its
+  coordinator has died; a git fingerprint of each peer's checkout at dispatch and
+  settle, since reviews ran while the driver edited the same files.
+
+Not yet addressed: a `wait`/`--detach` pair to replace ad-hoc polling; cost in
+dollars for non-Claude peers (Claude's `total_cost_usd` is now recorded); typed
+per-claim checklists that would help weaker drivers most; and the behavior cases in
+`tests/behavior_cases.json` have not yet been run with and without these changes, so
+the fixes are justified by observed failures but their effect is not yet measured.

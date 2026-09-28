@@ -1,160 +1,199 @@
-# riff
+# Riff
 
-A Claude Code skill for working with OpenAI's Codex CLI as a **peer**, not a tool, across coding and non-coding work. It registers in Claude Code as `codex`. The name **riff** is the point: two frontier models exploring a problem across both their semantic spaces, rather than one directing the other as a subordinate.
+Riff lets Claude Code, Codex, Pi, and Hermes consult, discuss, or delegate to one
+another through one shared Agent Skill.
 
-Three modes (delegate, consult, roundtable). Two transports (the Codex MCP server, or `codex exec` on the CLI as a fallback). One trace contract, so every cross-model invocation is inspectable and testable.
+It combines two things:
 
-> **Status:** v1, works end to end. The eval scaffolding is real and passes against a shipped fixture. The live harness that auto-collects fixtures is the next thing to build (see [What's open](#whats-open)).
+- accumulated guidance for productive cross-model collaboration; and
+- a deterministic coordinator for processes, native sessions, artifacts, timeouts,
+  permissions, and traces.
 
-## Install
+The current interactive harness remains the driver. Peers return independent
+artifacts; the driver verifies and synthesizes them.
 
-```bash
-git clone https://github.com/NasonZ/riff ~/.claude/skills/codex
+```text
+Claude Code / Codex / Pi / Hermes
+               │ current driver
+               ▼
+          shared Riff skill
+               │
+               ▼
+         local coordinator
+        ┌──────┼──────┐
+        ▼      ▼      ▼
+     Claude  Codex    Pi ── local or hosted models
+                       └── Hermes
 ```
 
-Claude Code picks up user-level skills from `~/.claude/skills/*/SKILL.md` on its own. Restart it and you're done. Want it scoped to a single project instead? Clone into `<project>/.claude/skills/codex`.
+## Why both a skill and code?
 
-### Prerequisites
+The skill contains the judgment that made the original Riff useful:
 
-- **Codex CLI**, required: `npm install -g @openai/codex@latest`
-- **Codex MCP server**, recommended for cleaner multi-turn: `claude mcp add codex -- codex mcp-server`, then restart Claude Code. The skill figures out whether MCP is wired up and falls back to the CLI if it isn't.
-- **Python 3.10+** with `pytest`, `pyyaml`, `jsonschema`, only if you want to run the evals.
+- independent-first elicitation;
+- openness to reframing;
+- peer rather than master/subordinate posture;
+- persona and persuasion discipline;
+- bounded discussion;
+- explicit delegation contracts; and
+- verification before integration.
 
-## Why a dyad and not a council
+The coordinator makes fragile mechanics reproducible:
 
-Most multi-LLM deliberation projects are councils: N ≥ 3 models, anonymous peer review, a chairman to synthesize. Karpathy's LLM Council, yogirk's Agent Council, Perplexity's Model Council. They're powerful, but the orchestration cost is high and it scales with N.
+- unique participant and session identity;
+- multiple instances of the same harness;
+- native start and resume;
+- Pi `agent_settled` handling;
+- parallel fan-out and sequential pipelines;
+- write-directory collision guards;
+- recursion limits; and
+- automatic privacy-conscious run records.
 
-riff is the dyad. Two frontier models (Claude Opus 4.x and Codex / GPT-5.x) collaborating directly. Lower orchestration cost, a tighter feedback loop, and for most cross-model problems two independent semantic spaces meeting is enough to surface what either would miss on its own.
+See [the playbook](references/PLAYBOOK.md),
+[protocols](references/PROTOCOLS.md), [harness notes](references/HARNESSES.md),
+and [design](references/DESIGN.md).
 
-OpenAI's [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) does one-directional delegation, Claude to Codex. riff covers that, plus consult (a one-shot independent read) and roundtable (multi-round, three sub-modes). It also treats Codex as able to reframe Claude's question, not just answer it, which the literature on persona drift and persuasion between LLMs says isn't automatic.
+## Supported adapters
 
-## The three modes
+| Harness | Start/reply | Model controls | Tool scope |
+|---|---|---|---|
+| Claude Code | Explicit session UUID | model, effort, configured provider, extra read dirs, allowed test commands | none/read/read+web/write |
+| Codex | Explicit thread ID | model, reasoning effort, OpenAI/local mode | sandboxed none/read/write |
+| Pi | Persistent JSONL RPC | provider, model, thinking | none/read/write |
+| Hermes | Explicit quiet-CLI session | provider, model, max turns | none/read; write disabled |
 
-| Mode | When to use | Stop condition |
-|---|---|---|
-| **delegate** | Hand off a well-scoped task: long-running analyses, codebase walks, multi-file refactors. Frees your context window. | Worker emits an artifact; driver verifies and integrates |
-| **consult** | You have a draft, diagnosis, or plan and want an independent read before committing. Good for "am I missing something obvious." | Single round by default, or independent-first (2 rounds) |
-| **roundtable** | A contested decision with real tradeoffs: design philosophy, strategy, taxonomy. Three sub-modes, below. | Depends on the sub-mode |
+Use Pi for llama.cpp/vLLM-hosted models when agent features are required. Those
+servers supply inference, while Pi supplies sessions, tools, and settlement.
 
-Roundtable splits three ways because one stop signal doesn't fit every kind of back-and-forth:
+## Install one shared copy
 
-- **A. Convergence** (an X-or-Y decision): JSON-schema-enforced output with `status: CONSENSUS|CONTINUE`. No suffix parsing.
-- **B. Critique** (a concrete artifact, no binary vote): free prose both ways, with a text marker for "I'm satisfied." A schema here would just flatten things artificially.
-- **C. Exploration** (abstract, no decision endpoint): no stop signal at all. You decide when it's done. There's guidance to redirect if Codex's critique reflex outlasts its usefulness.
+Keep one source checkout and link it into the common Agent Skills directory:
 
-## The trace contract
+```bash
+git clone https://github.com/NasonZ/riff ~/src/riff
+mkdir -p ~/.agents/skills ~/.claude/skills
+ln -s ~/src/riff ~/.agents/skills/riff
+ln -s ~/src/riff ~/.claude/skills/riff
+```
 
-Every non-trivial call emits a JSON trace against [`evals/trace_schema.json`](evals/trace_schema.json):
+Codex and Pi discover `~/.agents/skills`. Claude Code follows the Claude skill
+symlink. Configure Hermes to trust the shared directory in `~/.hermes/config.yaml`:
+
+```yaml
+skills:
+  external_dirs:
+    - ~/.agents/skills
+```
+
+### Migrate overlapping skills safely
+
+Skill selection happens before Riff's body can arbitrate a collision. After Riff
+passes a live validation, make older broad-triggering `codex` or `qwen-peer` skills
+non-automatic while keeping them recoverable:
+
+- In Claude Code, add `disable-model-invocation: true` to an old skill's frontmatter
+  if it should remain available for explicit invocation.
+- In Hermes, add an overlapping builtin name to `skills.disabled` while keeping
+  `riff` available through `external_dirs`.
+- Move a superseded directory outside scanned skill roots instead of deleting it
+  until the migration has been exercised from every intended driver.
+
+Then use a fresh session for both a positive prompt (for example, “ask a Codex peer
+to review this”) and a negative prompt that merely mentions Codex. Confirm the
+positive case selects Riff and the negative case stays solo.
+
+A configured Codex MCP server is separate from the old skill. Riff's current Codex
+adapter uses `codex exec` JSONL, so a connected MCP remains a parallel raw route
+that Claude could choose directly. For a strict migration probe, temporarily
+disable or remove that MCP after preserving its definition, then restore it later
+only if a deliberate escape hatch is wanted.
+
+## Check the installation
+
+```bash
+python3 scripts/riff.py capabilities
+python3 -m unittest discover -s tests -v
+```
+
+No third-party Python dependency is required.
+
+For deterministic driver probes, the supported executable overrides are
+`RIFF_CLAUDE_BIN`, `RIFF_CODEX_BIN`, `RIFF_PI_BIN`, and `RIFF_HERMES_BIN`; use
+`RIFF_STATE_DIR` for isolated state. See
+[the harness notes](references/HARNESSES.md#diagnostics-and-test-seams).
+
+## Request example
 
 ```json
 {
-  "trace_id": "uuid",
-  "skill_mode": "delegate|consult|roundtable-A|roundtable-B|roundtable-C",
-  "transport": "mcp|cli",
-  "request": {
-    "task": "...",
-    "context_refs": ["..."],
-    "context_digest": "sha256:...",
-    "driver_position": "withheld|provided|none",
-    "constraints": [...],
-    "out_of_scope": [...],
-    "acceptance_criteria": [...]
+  "version": 1,
+  "mode": "consult",
+  "task": "Find the strongest flaw in this proposed design.",
+  "origin_harness": "claude",
+  "participants": [
+    {
+      "id": "codex-review",
+      "harness": "codex",
+      "cwd": "/absolute/project/path",
+      "tools": "read",
+      "params": {"reasoning_effort": "high"}
+    },
+    {
+      "id": "qwen-local",
+      "harness": "pi",
+      "provider": "llama.cpp",
+      "model": "qwen",
+      "cwd": "/absolute/project/path",
+      "tools": "read",
+      "params": {"thinking": "high"}
+    }
+  ],
+  "coordination": {
+    "dispatch": "broadcast",
+    "independent_first": true,
+    "max_rounds": 3
   },
-  "execution": { "exit_status", "elapsed_ms", "tokens", "thread_id", ... },
-  "response": {
-    "artifact": "...",
-    "evidence": [{"kind": "file_line", "ref": "src/x.py:42"}, ...],
-    "framing": {"status": "accepted|narrowed|broadened|challenged|rejected", ...}
-  },
-  "verification": { "verifier", "checks": [...], "result" },
-  "handoff": { "integrated_by_driver", "driver_changes_made", ... },
-  "outcome": "accepted|reframed|retried|abandoned"
+  "driver_prediction": "The migration ordering; anything deeper changes the plan.",
+  "context_refs": ["docs/design.md"],
+  "constraints": ["Do not modify files"],
+  "acceptance_criteria": ["Cite file:line for each concern"],
+  "out_of_scope": ["Do not propose a storage rewrite"]
 }
 ```
 
-Cross-model skills fail at the handoff more than at answer generation. Anthropic's skill-creator framework checks whether a skill *fires* and what it *outputs*. For cross-model work that's not enough. You also need what was *sent*, whether constraints survived translation across the other model's priors, whether the driver verified before integrating, and whether the worker pushed back on the framing or deferred to it. The trace makes all of that observable, and the evals run against it.
-
-A few choices in the schema worth knowing about:
-
-- `acceptance_criteria` lives at the `request` level, so the driver commits to observable pass/fail checks *before* it sees the response.
-- `framing.status` is an enum rather than free text, because "the model reframed the question" is only useful if you can measure it.
-- The `handoff` block is first-class, since that's where most cross-model failures actually happen.
-- `evidence` is typed (`kind` + `ref`), not a blob of prose.
-- There's no `confidence` field. It's decorative until it's calibrated, so it's gone.
-
-## The eval suite
-
-**Twelve cases** on a `blocker / sharp / soft` severity ladder. Four of them test the *driver*, not the worker, which is the part most eval setups skip:
-
-- `verification-catches-bad-worker`: a seeded false claim has to trip `verification.result=failed`.
-- `worker-error-surfaced`: timeouts and refusals can't get laundered into fake success.
-- `authority-boundary`: a worker overstepping its scope can't be waved through silently.
-- `delegate-context-minimality`: no secrets or out-of-project paths in `context_refs`.
-
-The rest cover the happy path, spec quality, independent-first, roundtable convergence and reframing, MCP fallback, and persona discipline.
+Run it:
 
 ```bash
-pip install pytest pyyaml jsonschema
-pytest ~/.claude/skills/codex/evals/                 # all
-pytest ~/.claude/skills/codex/evals/ -m "not slow"   # skip live
-pytest ~/.claude/skills/codex/evals/ -k delegate     # a subset
+python3 scripts/riff.py validate --request request.json   # errors and warnings
+python3 scripts/riff.py run --request request.json        # prints the run ID first
 ```
 
-The description-precision tests (`triggers.yaml`) sit in a separate, slower layer. They use LLM-as-judge, but with guardrails against its usual failure modes: two judges (Claude and Codex) that have to agree, multiple seeds, Wilson 95% intervals on pass rates instead of a single pass/fail, adversarial negatives, and a human queue for the disagreements.
+The result points to participant artifacts and the run manifest, lists any tools a
+peer was denied, and carries `next_steps` for the driver. Continue a native session
+with `riff.py reply`, then record verification; `--run` commands are executed and
+their exit codes recorded, while `--check` text is labelled as asserted:
 
-## Design principles
-
-Full rationale is in [`references/DESIGN.md`](references/DESIGN.md). Short version:
-
-1. **Codex is a peer.** It can be sharper than Claude on any given problem, and which side the good idea comes from isn't decided up front. It's a two-way street. The driver/worker split in delegate mode is just coordination, not a ranking.
-2. **Match the mode to the shape of the work.** Schemas for X-or-Y calls, free prose for critique, no stop signal for open exploration. Default to the loosest shape that still fits.
-3. **No persona prompts by default.** The 2026 research shows up to ~26% performance drop from task-irrelevant persona cues ([arXiv 2602.12285](https://arxiv.org/abs/2602.12285)), and rationale quality slips even when surface accuracy goes up ([arXiv 2408.08631](https://arxiv.org/abs/2408.08631)). Give direct, task-specific instructions instead.
-4. **Traces make handoffs observable.** The evals score the emitted trace, not just the final answer.
-5. **Verify, don't blind-trust.** The delegate workflow has a mandatory verification step. Persuasion drift between LLMs is a real, documented failure mode ([Nature Sci. Reports](https://www.nature.com/articles/s41598-026-42705-7); [arXiv 2406.14711](https://arxiv.org/abs/2406.14711)), so judge Codex's arguments on the merits no matter how confidently they're stated.
-
-## Repository layout
-
-```
-codex/
-├── README.md          ← this file (humans)
-├── SKILL.md           ← what Claude reads to do the work
-├── references/
-│   ├── DESIGN.md      ← architecture + rationale
-│   └── NOTES.md       ← build log, lessons, research landscape
-└── evals/
-    ├── README.md           ← eval suite design + run instructions
-    ├── trace_schema.json   ← the contract every delegation emits against
-    ├── cases.yaml          ← 12 named eval cases with severity ladder
-    ├── triggers.yaml       ← description-precision tests
-    ├── conftest.py
-    ├── test_trace_contract.py
-    └── fixtures/delegate-happy-path.json
+```bash
+python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
+  --run "python3 -m unittest discover -s tests" --check "Read the diff" --integrated
 ```
 
-`SKILL.md` is the only file Claude loads on its own, and only when something triggers it. Everything else is reference material or eval harness.
+For long Pi/Qwen turns, start with a preallocated UUID using `run --run-id <uuid>`
+and inspect it from another shell:
 
-## What's open
+```bash
+python3 scripts/riff.py progress --run-id <uuid> --participant qwen-local
+```
 
-- **A live harness that auto-collects fixtures.** The evals validate trace fixtures today; the loop that produces those fixtures from real runs (with seeded scenarios for the blocker cases) is the next milestone.
-- **The trigger-precision runner.** `triggers.yaml` has the cases; the multi-judge + Wilson-interval runner that consumes them isn't built yet.
-- **Custom validators for the harder assertions.** Checks like `convergence_check: same_recommendation_last_2_rounds` are written down in `cases.yaml` for human review but aren't auto-checked.
-- **Cross-session memory.** Every session starts cold right now. Indexing collected traces would fix that.
+The default live view reports RPC delta and durable-session metadata without
+exposing reasoning or answer contents. `--previews` explicitly opts into short
+content previews.
 
-## Credits
+## Development
 
-Built by Nason ([@NasonZ](https://github.com/NasonZ)) in a Claude Code + OpenAI Codex collaboration. Grounded in:
+Keep tests focused on invariants. Process tests use fake harness executables, so
+they validate command construction, parsing, persistence, and settlement without
+spending model tokens. Live model smoke tests are opt-in and should exercise every
+driver direction before old installed skills are retired.
 
-- Anthropic, [Improving Skill Creator: Test, Measure, Refine](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
-- Karpathy's [LLM Council](https://github.com/karpathy/llm-council)
-- [yogirk/agent-council](https://github.com/yogirk/agent-council)
-- OpenAI's [codex-plugin-cc](https://github.com/openai/codex-plugin-cc)
-- philschmid, Practical Guide to Evaluating Agent Skills
-- Pydantic AI / Mastra / Langfuse, for the observability and OTel span shapes behind the trace contract
-- Persona-prompting research, arXiv 2408.08631 and 2602.12285
-- Multi-agent debate failure modes, Nature Sci. Reports and arXiv 2406.14711
-
-Full source list in [`references/NOTES.md`](references/NOTES.md).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+Riff uses the MIT License.

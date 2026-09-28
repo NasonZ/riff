@@ -1,116 +1,267 @@
-# Codex skill — design
+# Riff design
 
-Reference doc for the codex skill at `~/.claude/skills/codex/`. For the journey that produced this design — what we tried, what changed, what's still open — see `./NOTES.md`. For operational guidance to Claude, see `../SKILL.md`. For the eval suite, see `../evals/README.md`.
+Riff is a shared Agent Skill plus a deterministic local coordinator for
+cross-harness collaboration. It preserves the original project's accumulated
+epistemic and delegation knowledge while generalizing the original Claude→Codex
+dyad into a driver-neutral, multi-participant system.
 
-## What this skill is
+## Contents
 
-A Claude Code skill teaching Claude (Opus 4.x) how to collaborate with OpenAI Codex CLI (GPT-5.x) as a peer agent on coding *and* non-coding problems. Supports three modes — **delegate** (hand off a task), **consult** (one-shot second opinion), **roundtable** (multi-round back-and-forth) — across two transports: the official `codex` MCP server (preferred) and the `codex exec` CLI (fallback).
+- [Purpose and boundary](#purpose-and-boundary)
+- [Knowledge architecture](#knowledge-architecture)
+- [Coordination topology](#coordination-topology)
+- [Contracts and adapters](#contracts-and-adapters)
+- [State and observability](#state-and-observability)
+- [Authority](#authority)
+- [Testing strategy](#testing-strategy)
+- [Deliberate non-goals](#deliberate-non-goals)
 
-What it is **not**: a full N-model council (anonymous peer review breaks down at N=2), a coding-only tool, or a master/worker abstraction that positions Claude above Codex.
+## Purpose and boundary
 
-## The dyad, not the council
+The skill owns judgment:
 
-By May 2026 several multi-LLM deliberation projects had shipped (Karpathy's LLM Council, Agent Council, Council of High Intelligence, Perplexity Model Council). They operate on N≥3 models with anonymous peer review and a "Chairman LLM" synthesis, and report ~2× consideration coverage vs single-agent — at the cost of latency, token spend, and orchestration complexity.
+- when collaboration is worth its cost;
+- how to elicit independent views;
+- how to structure consultation, discussion, and delegation;
+- how to resist persona and persuasion artifacts; and
+- how to verify and synthesize.
 
-We picked the **dyad** (just two agents) consciously:
+The coordinator owns fragile mechanics:
 
-- Lower orchestration cost and faster feedback loop.
-- Two models with different priors can surface issues one model would miss.
-- Anonymous peer review (the council's defining mechanism) requires N≥3. The dyad gets the *Independent-first* technique instead — ask the question first, share your view only after — which captures most of the anchoring-avoidance benefit.
+- process launch and timeout;
+- explicit native session identity;
+- fan-out and pipeline ordering;
+- artifact and log paths;
+- recursive-invocation prevention; and
+- automatic run and turn records.
 
-The trade-off: we lose the council's robustness against any single model's blind spots. The dyad inherits the union of Claude's and Codex's blind spots, not the intersection.
+Adapters compile the common contract into native harness operations. Riff does not
+become another model provider registry, tool runtime, sandbox, or agent framework.
 
-## Three modes, three different shapes of work
+## Knowledge architecture
 
-| Mode | Shape | Stop signal | Primary use |
-|---|---|---|---|
-| **delegate** | Driver/worker — Claude plans, Codex executes a contracted task, Claude verifies | Worker emits artifact, driver verifies and integrates | Long-running analysis, codebase walks, multi-file refactors |
-| **consult** | One round — share a question, get an independent take | Single response, then Claude synthesizes | Stuck on a bug, design choice, "am I missing something" |
-| **roundtable** | Multi-round back-and-forth | Mode-dependent (see below) | Contested decisions, design philosophy, ethics, strategy |
+Riff's existing know-how is an asset, not migration debris. Preserve it through
+progressive disclosure:
 
-The roundtable has **three sub-modes** internally because one stop-signal mechanism does not fit all back-and-forth:
+```text
+field observation / research
+            │
+            ▼
+         NOTES.md
+ evidence, failed attempts, caveats
+            │
+            ▼
+        PLAYBOOK.md
+      durable judgment
+            │
+     ┌──────┴────────┐
+     ▼               ▼
+  SKILL.md       PROTOCOLS.md
+always-active     mode-specific
+     │               │
+     └──────┬────────┘
+            ▼
+ coordinator/adapters + focused tests
+```
 
-- **A — Convergence** (concrete decision X or Y): JSON-schema-enforced output with `status: CONSENSUS|CONTINUE` enum. No suffix parsing. Suits concrete decisions where the output bucketizes cleanly.
-- **B — Critique** (concrete artifact, no binary vote): text marker (`CONSENSUS:` / `CONTINUE:`), free prose both ways. Schema would force artificial flatness on a discussion that naturally interleaves observation + question + counter-proposal.
-- **C — Exploration** (abstract, no decision): no stop signal. User decides when it's done. Includes guidance to redirect Codex if its critique reflex persists past usefulness.
+Promote a lesson rather than merely moving text: observation → general principle →
+runtime rule → executable invariant → regression test. Keep volatile harness flags
+in `HARNESSES.md` and their authoritative behavior in adapter tests.
 
-## Architectural decisions and why
+## Coordination topology
 
-### Trace contract as the unit of observability
+Any supported harness can be the current driver and any supported harness can be a
+participant, including another instance of the same harness. This provides a
+user-facing full mesh without direct N² peer connections:
 
-Cross-model skills fail at the handoff (driver/worker contract) more often than at raw answer generation. Anthropic's skill-creator framework checks if a skill *fires* and what it *outputs*; it doesn't inspect what was *sent* to a second model, whether constraints survived translation, whether the driver verified, whether the worker pushed back on the framing.
+```text
+current driver → Riff coordinator → participant sessions
+                            ├──────→ participant session
+                            └──────→ participant session
+```
 
-So every non-trivial invocation emits a JSON trace conforming to `evals/trace_schema.json`. The trace — not the raw model output — is what gets eval'd. Fields are partitioned into:
+The driver mediates every later round. Child sessions cannot recursively invoke
+Riff at the default depth. This keeps permissions, provenance, cost, and synthesis
+visible in one place.
 
-- `request` (the contract Claude gave Codex — including `driver_position: withheld|provided|none` for independent-first measurement, `context_refs` not pasted context, `context_digest` for drift detection, `acceptance_criteria` committed up-front)
-- `execution` (observability — OTel-shaped: `elapsed_ms`, `exit_status`, `error_type`, `tool_calls`)
-- `response` (artifact + structured `evidence` typed by kind + `framing.status` enum for reframe-detection)
-- `verification` (`verifier` enum + list of `checks` with results)
-- `handoff` (did the driver actually integrate? did it modify the output? what did it change?)
-- `outcome` (terminal disposition: `accepted` / `reframed` / `retried` / `abandoned`)
+### Before and after
 
-The schema deliberately drops some "obvious" fields (`confidence`, free-text `reframed_question`) because they're noise without calibration.
+The previous repository coupled one driver, one peer, one transport, and the
+collaboration guidance in a single skill:
 
-### Eval suite over collected traces, not live invocations
+```text
+Claude Code
+  └─ MCP call → one Codex thread
+       └─ hand-authored/optional trace fixture
+```
 
-The eval suite at `evals/` validates fixtures (collected trace JSON) against the schema and case-specific assertions. It does **not** invoke the live skill on every CI run.
+The refactor keeps the guidance while replacing the fixed edge with a shared
+contract and four small adapters:
 
-Why: live invocations are expensive (LLM tokens), slow (seconds per case), and non-deterministic (LLM outputs vary across runs). A fast, deterministic suite over collected traces catches regressions in skill behavior as long as traces accumulate from real use. Live regression runs happen on a slower cadence (marked `-m slow` for the future live harness, not yet shipped).
+```text
+any current driver
+  └─ RunRequest → Coordinator
+                   ├─ ClaudeAdapter → explicit Claude session
+                   ├─ CodexAdapter  → explicit Codex thread
+                   ├─ PiAdapter     → RPC + explicit Pi session
+                   └─ HermesAdapter → explicit Hermes session
+                          │
+                          └─ RunStore → manifest, turns, artifacts, logs
+```
 
-This trade-off mirrors the difference between unit tests (cheap, deterministic, run constantly) and integration tests (expensive, less deterministic, run on a slower cadence).
+In code, orchestration depends only on the normalized adapter boundary:
 
-### Twelve cases with a severity ladder
+```python
+class HarnessAdapter:
+    def capability(self) -> dict: ...
+    def start(self, turn: TurnRequest) -> SettledTurn: ...
+    def reply(self, turn: TurnRequest) -> SettledTurn: ...
+```
 
-Eight cases would be the lazy floor; twenty would be over-engineered for a v1. Twelve hits the right shape:
+Adding a harness therefore does not add new pairwise Claude↔X, Codex↔X, or Pi↔X
+paths. It adds one compiler from the common turn contract to that harness's native
+protocol.
 
-- 7 delegation cases (the original purpose of the skill — getting these right matters most)
-- 1 consult, 2 roundtable, 1 transport, 1 discipline
+## Contracts and adapters
 
-Severity ladder: `blocker` (CI fails) / `sharp` (xfail, visible but non-blocking) / `soft` (warn only). Prevents the suite from becoming all-or-nothing.
+The versioned JSON request names participants inline. Profiles are optional user
+convenience, not a required registry. Each participant declares:
 
-Four of the cases are explicitly **driver-side** failures (`verification-catches-bad-worker`, `worker-error-surfaced`, `authority-boundary`, `delegate-context-minimality`). These exist because, per Codex's own pushback during design, "Cross-model skills fail at the handoff and integration layer more often than at raw answer generation." Testing the worker without testing the driver gives false confidence.
+- a unique instance ID;
+- harness;
+- working directory and tool scope;
+- optional provider/model;
+- optional adapter-owned parameters; and
+- optional split task or focus.
 
-### Trigger precision tests separated from the main suite
+Adapters fail closed on unknown parameters. This prevents an apparently generic
+`extra_args` field from becoming command injection or a silent portability trap.
 
-`evals/triggers.yaml` lists prompts that should/shouldn't activate the skill. Description precision gates whether the skill fires at all — Anthropic's own skill-creator improved triggering on 5/6 skills after this kind of testing.
+Each adapter implements `capability`, `start`, and `reply`, returning a normalized
+settled turn with artifact, native session handle, usage when available, authority
+enforcement level, and explicit failure.
 
-The trigger suite runs separately (slower cadence) because it's LLM-as-judge — which has known bias issues. Mitigations:
-- Multi-judge (Claude + Codex, must agree)
-- Multi-seed (≥3 runs per judge)
-- Wilson 95% CIs on pass rates, not single pass/fail
-- Adversarial negatives — prompts that mention "codex"/"delegate" conversationally where the skill should stay silent
-- Disagreements → human review queue, not auto-resolved
+Pi is the normal bridge to llama.cpp/vLLM because it supplies agent semantics above
+their inference endpoints. A raw OpenAI-compatible adapter may be added later for
+tool-free consultation, but must not claim repository-agent behavior.
 
-### No persona prompts by default
+## State and observability
 
-The cited 2026 papers argue against default persona prompting. Performance can degrade up to ~26% on agentic benchmarks from task-irrelevant persona cues (arXiv 2602.12285); rationale quality drops even when surface accuracy improves (arXiv 2408.08631).
+State defaults to `$XDG_STATE_HOME/riff` or `~/.local/state/riff`:
 
-The skill defaults to no persona. Task-specific attention direction ("focus on race conditions in `chat()`") is acceptable and isn't really a persona — it's a focused question. Personality role-play ("act as Aristotle", "be a senior engineer") is explicitly discouraged and enforced at the eval layer via the `persona-discipline` case (regex against the actual prompt sent to Codex).
+```text
+runs/<run-id>/
+├── run.json
+├── participants/<participant-id>.json
+├── participants/<participant-id>/...native state...
+├── turns/<turn-id>.json
+├── artifacts/<turn-id>.md
+└── logs/<turn-id>.log
+```
 
-### Treat Codex as a peer
+`run.json` stores coordination metadata, task digest, references, status, and driver
+verification. It does not duplicate full prompts or artifacts. Turn records store a
+prompt digest, artifact path/hash, native session handle, timing, usage, and error.
 
-Codex's strengths may overlap with or exceed Claude's on any given problem. Direction of insight isn't predetermined. The driver/worker role in delegate mode is a coordination convenience, not a capability ranking.
+The coordinator emits records automatically. The driver only appends verification
+and integration truth; an empty, explicit `not_performed` is preferable to a
+fabricated successful check. Verification distinguishes two kinds of check. A
+`--run` command is executed by the coordinator, which records its exit code,
+duration, output hash, and output tail; with only executed checks the result is
+derived from exit codes, and a claimed `passed` that contradicts a failing command
+is rejected. A `--check` string is recorded as `asserted`: the driver's statement,
+honestly labelled, never presented as executed (`RIF-DELEGATE-002`).
 
-This shows up in concrete places:
-- The trace's `framing.status` enum has `challenged` and `rejected` as valid worker responses — the worker can reject the driver's question framing
-- The delegate workflow treats worker push-back as signal, not noise
-- The "Welcome reframing" technique invites Codex to push back on the question rather than answer it
-- The SKILL.md avoids wording that assumes Claude's frame is the primary one
+`validate` and `run` also return lint warnings for valid requests that tend to
+waste or bias a run: a delegation without acceptance criteria or out-of-scope
+items, persona wording, the driver's view inside a withheld task, an
+independent-first run without a `driver_prediction`, and fan-out beyond five
+participants. They warn rather than reject because each pattern has honest false
+positives. `driver_prediction` is stored in the manifest and never sent to a peer;
+with `verify --view-changed` it makes "did consulting change the decision?" a
+recorded fact rather than a recollection (`RIF-EPISTEMIC-003`).
 
-## What's open / future work
+An initial `run` returns both the aggregate run result and the result of the turns
+it just executed; these are identical on round one. A later `reply` keeps them
+separate: `turn_result` describes that reply, while `result` is recomputed across
+the latest state of every participant. A successful follow-up therefore cannot
+launder another participant's failure into overall success.
 
-- **No live harness yet.** `test_trace_contract.py` validates fixtures; the loop that produces fixtures by invoking the live skill end-to-end (with seeded scenarios for the four worker-failure cases) isn't built. Until it exists, those four cases — the blockers — are aspirational.
-- **Only one fixture shipped.** `fixtures/delegate-happy-path.json` is a hand-authored worked example. Real fixtures accumulate as the skill gets used; the SKILL.md instructs Claude to emit traces during real work.
-- **Complex assertions are unsupported.** The interpreter in `test_trace_contract.py` handles `==`, `in {...}`, `is non-empty`, `is present`. Things like `convergence_check: same_recommendation_last_2_rounds` are documented in `cases.yaml` for human review but not auto-checked yet.
-- **No trigger-suite implementation.** `triggers.yaml` defines the cases; the multi-judge runner with Wilson intervals isn't built.
-- **MCP `threadId` location.** Documented as top-level on Codex v0.133+ (verified live). Older client docs say `structuredContent.threadId`. Watch for this if the MCP protocol shifts.
-- **No memory of past delegations across sessions.** Each session starts fresh. Codex has its own thread persistence; Claude doesn't currently use it to remember "I delegated this kind of task last week and it failed for X reason." Could be added by indexing collected traces.
+For Pi, `progress` can inspect the RPC stream log and native JSONL while a turn is
+active. Its default view exposes operational metadata—event/update counts, block
+types, character counts, and tool names—without copying thinking or answer text
+into coordinator output. The RPC log supplies low-latency deltas; the session JSONL
+supplies durable continuation records and may lag until an assistant/tool boundary.
+Short content previews require an explicit flag. Preallocated run UUIDs make the
+run addressable from a second shell before the blocking `run` command settles.
 
-## Cross-references
+Participant mutations use per-participant advisory locks, run aggregates use a run
+lock, and JSON state is written through unique fsynced temporary files followed by
+atomic replacement. This prevents concurrent replies from exceeding their round
+bound or corrupting shared manifests.
 
-- `../SKILL.md` — what Claude reads to do the work
-- `../evals/README.md` — eval suite operational doc, with run instructions
-- `../evals/trace_schema.json` — the schema itself (annotated with `description` fields)
-- `../evals/cases.yaml` — the 12 eval cases with assertions
-- `../evals/triggers.yaml` — description-precision tests
-- `./NOTES.md` — the journey, the research landscape, what was tried that didn't ship
+## Authority
+
+Tool scope has four shared values: `none`, `read`, `read+web`, and `write`.
+`read+web` is read-only file access plus outbound network fetch (web search and
+URL fetch); it grants no write, shell, or edit authority. Adapters report
+whether the scope is native, sandboxed, or prompt-enforced, and each adapter
+supports only the scopes it can enforce natively — unsupported scopes fail
+closed at command construction (as of this writing only Claude Code supports
+`read+web`, via `WebSearch`/`WebFetch` in its `--tools` allowlist). Riff does
+not imply authority from a mode name.
+
+The contract rejects:
+
+- concurrent writers sharing a working directory;
+- write-capable broadcast;
+- ambiguous split delegation;
+- unsupported harness parameters; and
+- recursion at the configured depth.
+
+Native sandbox and permission systems remain authoritative. The driver retains
+responsibility for reviewing changes and for every external side effect.
+
+## Testing strategy
+
+Use dependency-free `unittest` tests in four layers:
+
+1. Contract tests for ambiguity, authority boundaries, and request warnings.
+2. Coordinator tests with in-memory fake adapters for session isolation,
+   independent-first prompts, partial failure, traces, replies, round limits, and
+   executed verification.
+3. Process tests using fake executables for each adapter's command and output
+   protocol.
+4. Knowledge tests: every cited `RIF-*` identifier is defined with a basis,
+   `SKILL.md` links resolve one level deep, long references open with contents, and
+   the forward-test datasets are well formed.
+
+Keep live model tests opt-in. A passing fixture schema is not proof that the skill
+actually invoked a peer correctly. Do not keep aspirational cases that permanently
+skip or assertions the runner silently ignores.
+
+Two datasets drive forward tests with fresh agents; neither runs in CI because each
+costs model calls. `tests/trigger_cases.json` holds should- and should-not-trigger
+prompts, weighted toward near-misses; rerun it after any description change.
+`tests/behavior_cases.json` holds scenarios drawn from field failures, each tied to
+a rule and to observable expectations; run each with and without the change under
+test, judge the transcript and run manifest rather than the driver's summary, and
+record results in `NOTES.md`. A change that does not move a behavior case is not yet
+justified by evidence.
+
+The run store is itself an evaluation corpus. Manifests record mode, participants,
+timing, results, warnings, verification kinds, predictions, and whether the view
+changed; driver transcripts link to runs by run ID. Periodic field reviews over that
+corpus are how rules move from `[R]`/`[T]` to `[F]`.
+
+## Deliberate non-goals
+
+- No direct peer-to-peer mesh or recursive councils.
+- No required profile/configuration registry.
+- No hard-coded model roster or small reasoning-token budget.
+- No MCP or A2A dependency for local execution.
+- No silent multi-model fan-out.
+- No model-majority voting as final judgment.
+- No default persona role-play.
+- No implicit write, commit, push, deployment, or messaging authority.
+- No durable background daemon or cross-process cancellation API in v1.
