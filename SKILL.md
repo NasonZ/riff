@@ -91,7 +91,7 @@ minutes; call it again while it reports `running`.
 ```
 
 Give every participant a unique `id`. Match tool scope to the acceptance criteria,
-not just the risk: `none`, `read`, `read+web` (Claude peers only) to check external
+not just the risk: `none`, `read`, `read+web` (Claude and Codex peers) to check external
 sources, or `write` with explicit user authority. Read the artifact files; the run
 JSON is a handoff, not the answer. For long turns, `progress --run-id <id>` inspects
 a live run from another call. Several-peer requests are in `PROTOCOLS.md`.

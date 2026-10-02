@@ -60,7 +60,7 @@ and [design](references/DESIGN.md).
 | Harness | Start/reply | Model controls | Tool scope |
 |---|---|---|---|
 | Claude Code | Explicit session UUID | model, effort, configured provider, extra read dirs, allowed test commands | none/read/read+web/write |
-| Codex | Explicit thread ID | model, reasoning effort, OpenAI/local mode | sandboxed none/read/write |
+| Codex | Explicit thread ID | model, reasoning effort, OpenAI/local mode | sandboxed none/read/read+web/write |
 | Pi | Persistent JSONL RPC | provider, model, thinking | none/read/write |
 | Hermes | Explicit quiet-CLI session | provider, model, max turns | none/read; write disabled |
 

@@ -116,6 +116,9 @@ class ClaudeAdapter(HarnessAdapter):
                 )
         for directory in _string_list_param(turn.participant.params, "add_dirs"):
             command.extend(["--add-dir", str(Path(directory).expanduser().resolve())])
+        # The scope names the peer's authority, and MCP is in no scope. Without
+        # this, a configured MCP server adds tools --tools never mentioned.
+        command.append("--strict-mcp-config")
         environment = child_environment(turn)
         provider = turn.participant.provider
         if provider is not None:

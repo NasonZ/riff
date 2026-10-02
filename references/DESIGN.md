@@ -233,11 +233,24 @@ Tool scope has four shared values: `none`, `read`, `read+web`, and `write`.
 URL fetch); it grants no write, shell, or edit authority. Adapters report
 whether the scope is native, sandboxed, or prompt-enforced, and each adapter
 supports only the scopes it can enforce natively — unsupported scopes fail
-closed at command construction. As of this writing only Claude Code supports
-`read+web`, which needs both halves of its permission model: `--tools` to expose
+closed at command construction. Claude Code and Codex support `read+web`. On
+Claude it needs both halves of its permission model: `--tools` to expose
 WebSearch and WebFetch, and `--allowedTools` to pre-approve them under the
 non-interactive permission mode. Exposure alone looks correct and fails silently;
 see `HARNESSES.md`. Riff does not imply authority from a mode name.
+
+Codex inverts that problem. Its CLI enables web search by *default*, so a scope
+that does not name the web has to switch it off, or `read` silently grants
+outbound network. Riff therefore pins the top-level `web_search` setting in both
+directions.
+
+MCP is in no scope, for either harness, and both needed a fix. Claude takes
+`--strict-mcp-config`, which uses only servers named by `--mcp-config` — and riff
+names none. Codex has no per-run equivalent, so riff keeps a sanitised
+`CODEX_HOME` beside its own state: a copy of the user's config with every
+`[mcp_servers.*]` table removed, with auth and the model cache linked so
+credentials and model resolution are unchanged. A settled Codex turn reports
+`adapter_metadata.mcp_servers_suppressed`.
 
 The contract rejects:
 

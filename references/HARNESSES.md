@@ -117,7 +117,20 @@ Relevant mappings:
 
 - model → `--model`;
 - reasoning effort → `-c 'model_reasoning_effort="<level>"'`;
-- no/read/write tools → sandbox mode and prompt authority;
+- no/read/read+web/write tools → sandbox mode, the top-level `web_search`
+  setting and prompt authority. Web search is on by default in codex-cli
+  0.160.0 and `[features].web_search` is deprecated, so riff passes
+  `-c web_search="live"` for `read+web` and `-c web_search="disabled"` for every
+  other scope. Check the event stream when verifying whether a turn searched;
+- MCP servers are bounded by a sanitised `CODEX_HOME`, not by a flag. Three
+  per-run routes were tried and rejected: `-c mcp_servers={}` merges and is
+  ignored, `-c mcp.enabled=false` is unrecognised, and
+  `-c mcp_servers.<id>.enabled=false` replaces the server's table and breaks
+  config loading ("invalid transport"). Riff therefore writes the user's config
+  minus every `[mcp_servers.*]` table into `<state>/codex-home`, links
+  `auth.json` and `cache`, and sets `CODEX_HOME` for the turn. It cannot live
+  under a temporary directory: Codex refuses to create helper binaries there.
+  Inspect available tools when verifying MCP isolation;
 - non-repository directory → `--skip-git-repo-check` when explicitly allowed.
 
 Resume options differ from start options. In particular, a resumed session keeps

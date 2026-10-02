@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Any
 
 from ..models import SettledTurn, TurnRequest, ValidationError
+from ..state import default_state_root
 from .base import (
     HarnessAdapter,
+    child_environment,
     classify_error_text,
     executable,
     require_bool_param,
@@ -18,6 +21,54 @@ from .base import (
     require_supported_params,
     run_process,
 )
+
+MCP_TABLE = re.compile(r"\s*\[mcp_servers[.\]]")
+
+
+def _without_mcp_servers(config: str) -> str:
+    """The user's Codex config with every MCP server table removed."""
+    kept: list[str] = []
+    inside = False
+    for line in config.splitlines(keepends=True):
+        if MCP_TABLE.match(line):
+            inside = True
+            continue
+        if inside and line.lstrip().startswith("["):
+            inside = False
+        if not inside:
+            kept.append(line)
+    return "".join(kept)
+
+
+def codex_home(turn: TurnRequest) -> Path:
+    """A Codex home whose config declares no MCP servers.
+
+    The scope names a peer's authority and MCP is in no scope, but Codex offers
+    no per-run way to drop a configured server: `-c mcp_servers={}` merges and
+    is ignored, `-c mcp.enabled=false` is unrecognised, and
+    `-c mcp_servers.<id>.enabled=false` replaces the server's table and breaks
+    config loading outright ("invalid transport"). `CODEX_HOME` is the supported
+    control, so riff keeps a sanitised copy of the user's config beside its own
+    state and points the turn at it. Auth and the model cache are linked, so
+    credentials and model resolution are unchanged; it must not live under a
+    temporary directory, which Codex refuses.
+    """
+    real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    home = default_state_root() / "codex-home"
+    home.mkdir(parents=True, exist_ok=True)
+    source = real / "config.toml"
+    wanted = _without_mcp_servers(source.read_text()) if source.exists() else ""
+    target = home / "config.toml"
+    if not target.exists() or target.read_text() != wanted:
+        target.write_text(wanted)
+    for name in ("auth.json", "cache"):
+        link = home / name
+        if not link.exists() and (real / name).exists():
+            try:
+                link.symlink_to(real / name)
+            except OSError:
+                pass
+    return home
 
 
 class CodexAdapter(HarnessAdapter):
@@ -34,7 +85,7 @@ class CodexAdapter(HarnessAdapter):
             "harness": self.name,
             "available": available,
             "persistent_sessions": True,
-            "tool_scopes": ["none", "read", "write"],
+            "tool_scopes": ["none", "read", "read+web", "write"],
             "parameters": ["reasoning_effort", "skip_git_repo_check"],
         }
 
@@ -47,10 +98,6 @@ class CodexAdapter(HarnessAdapter):
         )
         require_string_param(self.name, turn.participant.params, "reasoning_effort")
         require_bool_param(self.name, turn.participant.params, "skip_git_repo_check")
-        if turn.participant.tools == "read+web":
-            raise ValidationError(
-                "codex does not support the read+web tool scope; use read or write"
-            )
         if turn.participant.provider not in {None, "openai", "oss", "ollama", "lmstudio"}:
             raise ValidationError(
                 "codex provider must be openai, oss, ollama, lmstudio, or null"
@@ -78,6 +125,18 @@ class CodexAdapter(HarnessAdapter):
                     "workspace-write" if turn.participant.tools == "write" else "read-only",
                 ]
             )
+        # codex-cli enables web search by default, and `[features].web_search` is
+        # deprecated in 0.160.0, so the top-level setting is pinned in both
+        # directions. Without this, `read` silently grants outbound network and
+        # the reported scope overstates nothing but understates the authority.
+        command.extend(
+            [
+                "-c",
+                'web_search="live"'
+                if turn.participant.tools == "read+web"
+                else 'web_search="disabled"',
+            ]
+        )
         if turn.participant.model:
             command.extend(["--model", turn.participant.model])
         provider = turn.participant.provider
@@ -104,8 +163,10 @@ class CodexAdapter(HarnessAdapter):
 
     def _run(self, turn: TurnRequest) -> SettledTurn:
         command = self.build_command(turn)
+        environment = child_environment(turn)
+        environment["CODEX_HOME"] = str(codex_home(turn))
         completed, elapsed_ms, timeout_error = run_process(
-            command, turn, input_text=turn.prompt
+            command, turn, input_text=turn.prompt, environment=environment
         )
         assert completed is not None
         events, parse_errors = _parse_events(completed.stdout)
@@ -164,9 +225,12 @@ class CodexAdapter(HarnessAdapter):
                 if turn.participant.tools == "none"
                 else "native-sandbox-and-prompt"
                 if turn.participant.tools == "write"
+                else "native-sandbox-and-config"
+                if turn.participant.tools == "read+web"
                 else "native-sandbox"
             ),
             adapter_metadata={
+                "mcp_servers_suppressed": True,
                 "event_count": len(events),
                 "parse_errors": parse_errors,
                 "settlement": "turn.completed" if settled else None,

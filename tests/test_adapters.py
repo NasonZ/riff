@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts.riff_core.adapters.claude import ClaudeAdapter
 from scripts.riff_core.adapters.codex import CodexAdapter
@@ -116,13 +118,61 @@ class AdapterCommandTests(unittest.TestCase):
             )
 
     def test_unsupported_harnesses_reject_read_plus_web(self) -> None:
-        for harness in ("codex", "pi", "hermes"):
+        for harness in ("pi", "hermes"):
             with self.assertRaisesRegex(ValidationError, "read\\+web"):
                 {
-                    "codex": CodexAdapter,
                     "pi": PiAdapter,
                     "hermes": HermesAdapter,
                 }[harness]().build_command(self.turn(harness, tools="read+web"))
+
+    def test_codex_turn_runs_against_a_home_without_mcp_servers(self) -> None:
+        # No per-run flag drops a configured server, so the sanitised CODEX_HOME
+        # is what makes the scope bound the peer's tools. Verified live: with it,
+        # the peer answers ABSENT for an MCP tool it otherwise calls.
+        from scripts.riff_core.adapters import codex as codex_module
+
+        real = self.root / "codex-real"
+        real.mkdir(parents=True, exist_ok=True)
+        (real / "config.toml").write_text(
+            'model = "gpt-6-astra"\n'
+            "\n[mcp_servers.firecrawl-local]\n"
+            'command = "npx"\n'
+            "\n[mcp_servers.firecrawl-local.env]\n"
+            'KEY = "x"\n'
+            "\n[projects.\"/tmp\"]\n"
+            'trust_level = "trusted"\n'
+        )
+        (real / "auth.json").write_text("{}")
+        state = self.root / "state"
+        with mock.patch.dict(
+            os.environ, {"CODEX_HOME": str(real), "RIFF_STATE_DIR": str(state)}
+        ):
+            home = codex_module.codex_home(self.turn("codex"))
+            config = (home / "config.toml").read_text()
+        self.assertNotIn("mcp_servers", config)
+        # everything that is not an MCP server survives, including later tables
+        self.assertIn('model = "gpt-6-astra"', config)
+        self.assertIn('trust_level = "trusted"', config)
+        self.assertTrue((home / "auth.json").exists(), "auth must still resolve")
+        self.assertEqual(home.parent, state.resolve(), "the home lives beside riff state")
+
+    def test_codex_pins_web_search_in_both_directions(self) -> None:
+        # codex-cli 0.160.0 enables web search by default, so a scope that does
+        # not name the web has to turn it off explicitly; otherwise `read`
+        # silently grants outbound network and the scope misreports authority.
+        def web_setting(tools: str) -> str:
+            command = CodexAdapter().build_command(self.turn("codex", tools=tools))
+            return command[command.index("-c") + 1] if "-c" in command else ""
+
+        self.assertEqual(web_setting("read+web"), 'web_search="live"')
+        for scope in ("none", "read", "write"):
+            self.assertEqual(web_setting(scope), 'web_search="disabled"')
+        self.assertIn(
+            "read+web", CodexAdapter().capability()["tool_scopes"]
+        )
+        # read+web grants no write authority: the sandbox stays read-only
+        command = CodexAdapter().build_command(self.turn("codex", tools="read+web"))
+        self.assertEqual(command[command.index("--sandbox") + 1], "read-only")
 
     def test_codex_uses_explicit_resume_and_reasoning_effort(self) -> None:
         command = CodexAdapter().build_command(

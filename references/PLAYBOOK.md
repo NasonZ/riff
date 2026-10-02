@@ -232,6 +232,7 @@ published research or vendor guidance, `[T]` convention or an untested hypothesi
 - `RIF-DELEGATE-002` [R] — an executed check outranks an asserted one.
 - `RIF-AUTHORITY-001` [T] — do not expand authority implicitly.
 - `RIF-AUTHORITY-002` [F] — match tool scope to the acceptance criteria.
+- `RIF-AUTHORITY-003` [F] — bound every tool the scope does not name.
 - `RIF-CONTEXT-001` [T] — prefer references and artifacts to transcript transfer.
 - `RIF-FAILURE-001` [F] — classify a peer failure before retrying it.
 - `RIF-COLLECTION-001` [F] — one installed skill owns each trigger.

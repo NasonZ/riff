@@ -393,8 +393,6 @@ WEB_CUE = re.compile(
     re.IGNORECASE,
 )
 FAN_OUT_LIMIT = 5
-
-
 def request_warnings(request: RunRequest) -> list[dict[str, str]]:
     """Return lint findings for a valid request that is likely to underperform."""
     warnings: list[dict[str, str]] = []
@@ -469,8 +467,8 @@ def request_warnings(request: RunRequest) -> list[dict[str, str]]:
                 warn(
                     "scope-lacks-web",
                     f"the task mentions web or external sources but {participant.id} has "
-                    f"tools={participant.tools}; use read+web on a Claude peer, or state that "
-                    "external claims will stay unverified",
+                    f"tools={participant.tools}; use read+web on a Claude or Codex peer, or "
+                    "state that external claims will stay unverified",
                 )
     for participant in request.participants:
         if participant.tools == "write" and _is_main_checkout(Path(participant.cwd)):
