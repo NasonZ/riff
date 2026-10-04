@@ -260,10 +260,12 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "--view-changed",
         choices=("yes", "no"),
-        help="whether the peers changed the driver's recorded prediction or view",
+        help="whether an existing view changed; omit when not applicable and explain in --note",
     )
     verify.add_argument("--integrated", action="store_true")
-    verify.add_argument("--note")
+    verify.add_argument(
+        "--note", help="contribution, adoption or rejection rationale, and remaining uncertainty"
+    )
     verify.set_defaults(handler=command_verify)
     return parser
 

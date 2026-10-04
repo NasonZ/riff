@@ -1,8 +1,9 @@
 # Riff protocols
 
 Read the relevant section before running a multi-turn discussion or a delegation.
-The coordinator handles sessions and artifacts; these protocols govern what to ask
-and how to interpret the result.
+The coordinator handles sessions and artifacts; this file covers request shapes,
+continuation, recovery, and outcome records. For collaboration choices and their
+reasons, use [the playbook](PLAYBOOK.md).
 
 ## Contents
 
@@ -11,6 +12,7 @@ and how to interpret the result.
 - [Discuss](#discuss)
 - [Delegate](#delegate)
 - [Several participants](#several-participants)
+- [Record the outcome](#record-the-outcome)
 - [Stopping](#stopping)
 - [Failure and recovery](#failure-and-recovery)
 
@@ -35,7 +37,7 @@ Choose the tool scope from what the acceptance criteria require
 - `read` — inspection of the working directory (add `params.add_dirs` for a Claude
   peer that must read elsewhere);
 - `read+web` — inspection plus web search and fetch, for claims that must be checked
-  against external sources (Claude peers only);
+  against external sources (Claude and Codex peers);
 - `write` — only when the user has authorized changes and the participant has an
   isolated worktree or writable directory.
 
@@ -45,55 +47,64 @@ check it.
 
 ## Consult
 
-Use consult for one-shot independent analysis, review, diagnosis, or reframing.
+Use consult for a single assessment or contribution: analysis, review, diagnosis,
+reframing, or development of an idea.
 
 Default flow:
 
-1. Record `driver_prediction`, then send the task and necessary evidence without
-   the driver's proposed answer.
+1. Set `driver_position` to `withheld`, `provided`, or `none` according to the
+   context you are sending. Record an expectation or uncertainty in
+   `driver_prediction` when useful; it is private to the driver record.
 2. Collect one settled artifact from every participant.
-3. Inspect claims and evidence.
-4. Compare with the recorded prediction.
-5. Verify material claims, record the verification, and synthesize.
+3. Check material factual claims and assess proposals against the task's aims.
+4. Record the checks, contribution, and remaining uncertainty, then synthesize.
 
 When the user explicitly asks to critique a proposal, send the proposal on the
-first turn and record `driver_position: provided`. Do not add a ceremonial second
-turn just to satisfy independent-first.
+first turn with `driver_position: provided` and `driver_position_text`. The latter
+is required; the coordinator includes it in the peer prompt and derives
+`independent_first: false`. Do not add a ceremonial second turn to satisfy an
+independence requirement the task does not have.
 
 ## Discuss
 
 Use discuss for contested choices, evolving designs, critique, or exploration.
-Riff preserves the useful distinctions from its original roundtable modes without
-making them separate public commands:
+Choose whether the next contribution should develop possibilities, critique a
+proposal, or resolve a decision; [the playbook](PLAYBOOK.md#choose-the-contribution)
+explains the tradeoffs. These shapes share the same `discuss` mode. Use prose for
+exploration and critique. When a discrete decision needs structured comparison,
+request a `position` and unresolved `concerns`; a `CONSENSUS` label alone proves
+nothing.
 
-- **Convergence** — a concrete decision is required. Track the current
-  recommendation and unresolved dissent. Structured output fits this shape: ask
-  for a `status` (`CONSENSUS` or `CONTINUE`), the current `position`, and the
-  unresolved `concerns`, and read those fields rather than parsing a suffix.
-- **Critique** — improve a concrete artifact. Preserve prose and stop when no
-  material concern remains. Do not force a schema: real critique interleaves
-  observations, questions, and counter-proposals, and a position/concerns split
-  flattens it.
-- **Exploration** — understand a space rather than force agreement. Stop when
-  marginal insight falls or the round budget is reached. Some peers default to
-  critique even here. Say so plainly: “we are exploring, not converging — extend
-  the idea rather than critique it.” If the reflex persists, that peer is the
-  wrong tool for this conversation; tell the user rather than grinding on.
+For an exploration with no prior position:
 
-Pick the shape that matches the conversation; do not default to convergence
-because it is the most structured. Before declaring convergence on a discrete
-decision, the devil's-advocate pass in `PLAYBOOK.md` is the cheap check that the
-agreement is real.
+```json
+{
+  "version": 1,
+  "mode": "discuss",
+  "task": "Develop possible ways to organize documentation for newcomers. Explain what each helps readers understand and leave useful alternatives open.",
+  "origin_harness": "codex",
+  "participants": [
+    {"id": "claude-ideas", "harness": "claude", "cwd": "/repo", "tools": "read"}
+  ],
+  "driver_position": "none",
+  "driver_prediction": "No preferred structure yet; unclear whether readers need tasks or concepts first.",
+  "context_refs": ["docs/audience.md"],
+  "acceptance_criteria": ["Connect proposals to the documented reader needs; label new assumptions"],
+  "out_of_scope": ["Editing the documentation"]
+}
+```
 
-Default flow:
+If developing an existing driver proposal, use `provided` and include its text
+instead. For independent comparison, collect isolated first-round artifacts before
+sharing views. Follow up on the most useful opening or material disagreement in
+the relevant native session; opaque extracts can help avoid prestige anchoring
+when cross-reviewing several peers.
 
-1. Obtain independent first-round artifacts.
-2. Let the driver identify the most important divergence.
-3. Send targeted follow-ups to the relevant native sessions.
-4. Optionally show opaque peer extracts for cross-review.
-5. Stop after at most three settled turns per participant (the default
-   `max_rounds`) unless the user requests more.
-6. Synthesize; do not use a majority vote as a substitute for judgment.
+The default `max_rounds` is three settled turns per participant. Stop sooner when
+the user has enough to proceed or another round adds little. Preserve useful
+alternatives and unresolved questions rather than forcing a decision. Use the
+playbook's counterargument pass when agreement appears premature, not as a
+mandatory extra round.
 
 The driver mediates discussion. Participants do not recursively invoke Riff or
 contact one another directly.
@@ -133,13 +144,12 @@ the driver's shell caps a single call, use `run --detach` and follow with bounde
 returns the same result JSON, next steps included. Do independent work in between
 only when there is some; polling has a cost.
 
-Expect delegation to take two turns: a first delivery, then a tightening pass
-through the same native session.
+Allow for a tightening pass in the same native session when review finds a gap.
+A delivery that meets the acceptance criteria does not need an extra turn.
 
-A delegation is the wrong shape when the task needs conversational back-and-forth
-(discuss instead), when it is the driver's own work being avoided, or when the
-driver cannot write a clean contract (consult first, then delegate the clarified
-task).
+Use discuss when the task needs conversational back-and-forth, or consult when the
+output is not yet clear enough to specify. Delegation transfers a bounded task;
+the driver remains responsible for its contract, assessment, and integration.
 
 ## Several participants
 
@@ -183,6 +193,54 @@ anchoring, but the driver must retain provenance.
 If several participants share a single-slot local inference endpoint, keep their
 identities distinct but set coordinator concurrency to one.
 
+## Record the outcome
+
+Use `verify` after assessing the artifacts. It records checks and the driver's
+outcome note; it does not turn an assessment of taste or usefulness into a factual
+verification. Choose the record that matches what happened.
+
+After inspecting a consult's decisive factual claim:
+
+```bash
+python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
+  --result passed --check "Compared the migration-order claim with src/migrate.py" \
+  --view-changed yes --note "The concern is supported; implementation is pending."
+```
+
+With only `--check`, `--result` is required: `passed`, `partial`, or `failed` refers
+to those named checks. The coordinator labels them `asserted`. State any remaining
+unverified claims in the note rather than letting a passing check imply that the
+whole artifact is correct.
+
+For exploration where no factual or acceptance checks were performed:
+
+```bash
+python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
+  --result not_performed \
+  --note "The peer proposed explanations within a task after we questioned separate entrances. Next: sketch a difficult transition in both structures. No prior preference, adoption, or reader testing."
+```
+
+This closes a pending record without claiming the ideas were verified. Omit
+`--view-changed` when there was no prior view to compare; when there was one, record
+`yes` or `no` and explain the contribution. A discussion can be useful without
+changing a view or adopting a decision.
+
+For delegated code, run the relevant acceptance checks and inspect the diff before
+integration. Once the change is actually applied, record it, for example:
+
+```bash
+python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
+  --run "python3 -m unittest discover -s tests" --check "Reviewed the parser diff" \
+  --integrated --note "Applied the reviewed fix; adjacent refactor was left out."
+```
+
+`--run` executes commands and derives the result from exit codes unless an explicit
+result is supplied. It rejects an explicit `passed` that contradicts a failing
+command. `--integrated` is the driver's report of an applied change or adopted
+decision, not a synonym for receiving an answer. Re-verifying preserves the prior
+record. Keep failures, corrections, and reasons for rejection: they are evidence
+for future evaluation as well as context for the current user.
+
 ## Stopping
 
 Stop a consult after the first settled artifact unless a specific ambiguity needs
@@ -192,7 +250,7 @@ Stop a discussion when any of these holds:
 
 - the action-relevant disagreements are resolved;
 - remaining disagreement is explained by values or assumptions rather than facts;
-- another round produces no material new evidence;
+- another round produces no useful development, distinction, or material evidence;
 - the configured round bound is reached; or
 - the user asks to stop.
 

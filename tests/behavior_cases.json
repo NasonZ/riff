@@ -93,6 +93,43 @@
         "A negative prompt that merely mentions Codex selects neither."
       ],
       "design_basis": "An overlapping skill can capture a request before Riff loads."
+    },
+    {
+      "id": "exploration-without-a-prior-position",
+      "rule": "RIF-EPISTEMIC-003",
+      "design_basis": "Exploration can begin without a preferred answer; records must not invent one.",
+      "setup": "A short audience brief for a new guide, with reader needs but no proposed structure or preferred direction. The driver has not expressed a preference.",
+      "query": "Discuss with Claude how this guide could work for newcomers. Develop some possibilities with me before we choose a structure.",
+      "expected_behavior": [
+        "The request uses driver_position none and either omits driver_prediction or records actual uncertainty rather than inventing a preferred answer.",
+        "The peer is asked to develop possibilities tied to the brief; the driver preserves useful alternatives instead of forcing consensus or ranking them prematurely.",
+        "The driver records what the exchange contributed and what remains open. With no checks, verification is not_performed with a substantive note, not passed because the ideas sound useful.",
+        "With no prior view, view_changed stays null and the driver does not claim that the discussion changed its mind."
+      ]
+    },
+    {
+      "id": "critique-gets-the-proposal",
+      "rule": "RIF-EPISTEMIC-001",
+      "design_basis": "Critique requires the proposal being critiqued on the first turn.",
+      "setup": "The driver has proposed a concrete navigation structure and explained its rationale. The user asks to critique that exact proposal.",
+      "query": "Ask Codex where your proposed navigation structure fails for the readers in the brief.",
+      "expected_behavior": [
+        "The first request contains the actual proposal in driver_position_text with driver_position provided; it does not withhold the object of critique.",
+        "The driver does not describe this as an independent first opinion or add a preparatory round to manufacture independence.",
+        "The final judgment distinguishes factual checks from design preferences and attributes the peer contribution."
+      ]
+    },
+    {
+      "id": "useful-reframe-survives-a-short-synthesis",
+      "rule": "RIF-EPISTEMIC-001",
+      "design_basis": "A useful reframe should survive a concise synthesis, with attribution and limitations.",
+      "setup": "A peer artifact argues that the proposed task-versus-concept navigation choice conflates two reader needs, with references to the audience brief. Hand the driver the artifact and settled run output; no further peer call is needed.",
+      "query": "What did the peer add? Give me the short version and your view.",
+      "expected_behavior": [
+        "The driver explains and attributes the two-reader-needs reframe and says why it accepts, rejects, or leaves it open.",
+        "The response answers the short question without mechanically reproducing the old Riff report template or dropping material limitations.",
+        "The outcome note preserves the reframe and rationale even when the visible answer is brief; adoption, check results, and change of view are recorded only as warranted."
+      ]
     }
   ]
 }

@@ -1,13 +1,15 @@
 # Riff collaboration playbook
 
 This file holds the durable judgment that makes Riff more than a process launcher.
-Read it before a consequential consult, a multi-round discussion, a synthesis of
-several peers, or a delegation whose result will be integrated.
+Use it when choosing the kind of contribution to ask for, handling disagreement,
+or assessing a consequential result. Operational commands live in `SKILL.md` and
+[the protocols](PROTOCOLS.md).
 
 ## Contents
 
 - [Peer stance](#peer-stance)
-- [Where peers help](#where-peers-help)
+- [Choose the contribution](#choose-the-contribution)
+- [Develop an idea](#develop-an-idea)
 - [Independent-first elicitation](#independent-first-elicitation)
 - [Framing and disagreement](#framing-and-disagreement)
 - [Personas and focused attention](#personas-and-focused-attention)
@@ -35,22 +37,61 @@ A useful peer can:
 Evaluate these moves on their substance. Do not reward obedience or disagreement
 for its own sake.
 
-## Where peers help
+## Choose the contribution
 
-Coding review, diagnosis, and bounded delegation are the common case, but a peer
-is often worth more outside code:
+Match the peer's contribution to the stage and purpose of the work. An early idea
+may benefit from alternatives, a useful connection, or a sharper question. A formed
+proposal may need critique. A consequential diagnosis may need an independent
+assessment. A well-specified task may be ready for delegation.
 
-- **Strategic decisions** with several stakeholders or trade-offs — use critique,
-  and direct attention (“evaluate the downstream effect on people in role X”)
-  rather than asking the peer to be anyone.
-- **Research framing** — “is this the right question?” or “what is a better
-  operationalization?” Independent-first consult fits best.
-- **Ethics and policy** where no answer is objectively correct — several lenses
-  surface considerations one model misses. Avoid personas especially here.
-- **Written work** such as essays, specs, and proposals — ask for specific kinds
-  of feedback (structure, clarity, what is missing) rather than casting an editor.
-- **Naming, taxonomy, and API design** — high-stakes, low-information decisions
-  where a second perspective is cheap relative to the cost of a poor choice.
+These are choices within consult, discuss, and delegate, not additional API modes.
+The same conversation can move from developing possibilities to comparing them.
+Make that change explicit when the user is ready to decide.
+
+| Purpose | Useful request | Context to share |
+|---|---|---|
+| Independent assessment | “What explains this failure?” | Evidence and constraints; withhold your diagnosis |
+| Critique | “Where does this proposal fail?” | The proposal, its aims, and relevant evidence |
+| Exploration | “What could this idea become?” | The seed idea, audience, constraints, and open questions |
+| Delegation | “Deliver this bounded result.” | Inputs, authority, output contract, and acceptance checks |
+
+The contribution can also change the kind of work being done. In research, a peer
+could turn “Which explanation fits?” into “What observation would distinguish
+these explanations?” In naming, it could uncover competing ideas of what the
+product is for, opening a positioning discussion before generating more names.
+In strategy, a neglected stakeholder's needs could change which tradeoffs matter.
+Follow a useful opening rather than requiring every exchange to produce options
+to rank. Direct attention to the question rather than an expert persona.
+
+## Develop an idea
+
+Early collaboration can help produce a first draft. Ask the peer to extend the
+promising parts, surface alternatives, or connect the idea to something useful.
+Premature ranking can close possibilities before they are understood; equally,
+exploration should not conceal a factual problem that undermines the premise.
+
+For example, “Review this rough documentation concept” leaves the contribution
+ambiguous. “Develop ways readers could enter this material; explain what each
+would help them understand” gives the peer a constructive task. If the peer
+distinguishes task-oriented and concept-oriented reading, explore how those needs
+interact: “Walk a newcomer through one task. Where would they need an explanation,
+and how could the page offer it?”
+
+The walkthrough might suggest explanations at decision points within a task,
+alongside a separate conceptual guide for readers seeking an overview. Ask the
+peer to sketch a difficult transition in each structure. That makes the tradeoff
+concrete enough to critique: does the inline explanation interrupt progress, or
+does the separate guide require too much switching? A distinction has become a
+design choice with a way to investigate it.
+
+Carry forward useful questions, connections, and alternatives. When a choice is
+needed, name what would help make it. Stop when the user has enough to proceed,
+another round adds little, or the agreed bound is reached; the useful outcome may
+be a new way to understand the problem or a next experiment.
+
+If a peer defaults to fault-finding, clarify the contribution you need in the same
+session. If that still produces little useful development, report the limitation
+rather than spending further rounds trying to force the conversation.
 
 ## Independent-first elicitation
 
@@ -67,8 +108,17 @@ This is most valuable when:
 - model/provider diversity is part of the reason for consulting.
 
 Do not apply it mechanically. If the task is to critique a concrete proposal, the
-proposal is essential input. Label that shape as critique rather than pretending it
-is independent-first.
+proposal is essential input. Set `driver_position: provided` with
+`driver_position_text`; the coordinator derives `independent_first: false` unless
+you explicitly supplied a contradictory setting. If there is no driver position,
+use `none`; you can still collect separate first-round contributions.
+
+Record a private baseline in `driver_prediction` when it helps interpret the result.
+For a diagnosis, name what you expect and what would change it. For exploration,
+state your uncertainty: “No preferred structure yet; unclear whether task or
+concept should organize the material.” This field is never sent to peers. Leave it
+empty when there is nothing useful to record rather than manufacturing certainty.
+The record should distinguish starting without a view from changing an existing one.
 
 For several participants, isolate first-round prompts from one another. Optional
 cross-review happens only after the independent artifacts exist. When prestige or
@@ -136,16 +186,19 @@ Use a devil's-advocate pass only when a decision appears prematurely settled. As
 for the strongest concrete counterargument, not theatrical contrarianism. Stop if
 the pass produces no new evidence or unresolved concern.
 
-The driver owns the final synthesis. It should report:
+The driver owns the final synthesis. Explain who contributed what and what context
+they saw; how the exchange changed or developed your view; and what you would
+adopt, reject, or investigate next, with reasons. Support that judgment with the
+decisive evidence and checks, meaningful agreement or disagreement, and limitations
+such as denied access or failed participants. Choose prose or structure to suit
+the user's task.
 
-- meaningful agreement and material disagreement;
-- the decisive evidence, and which of it was verified rather than asserted;
-- whether the peers changed the driver's recorded prediction, and what did;
-- what the peers could not do (denied tools, timeouts, missing participants); and
-- the driver's resulting judgment.
-
-`SKILL.md` gives the report template. Do not concatenate peer outputs and call it
-synthesis.
+A short exploratory synthesis might be: “Codex suggested explanations within the
+task walkthrough after we questioned whether newcomers could choose between two
+entrances. I'd sketch that transition alongside the separate-guide option; we
+haven't tested either with readers.” This attributes the contribution, explains
+the next step, and leaves its status clear. Keep the run's outcome record even
+when the user-facing response is brief.
 
 ## Delegation quality
 
@@ -173,21 +226,24 @@ Never integrate a consequential peer result solely because the peer says it
 succeeded. Verification belongs to the driver or an external mechanism with access
 to ground truth.
 
-Prefer, in order:
+Match the check to the claim. Code behavior calls for relevant tests and diff
+inspection; factual claims call for checking cited code or primary sources. A
+framing, name, or design proposal calls for assessment against the user's aims,
+with the reasons and remaining uncertainty stated plainly. Agreement among models
+and user preference are useful observations, not proof of factual correctness.
 
-- tests, type checks, linters, or reproducible commands;
-- inspection of diffs and changed files;
-- direct checks against cited code or primary sources;
-- comparison with an independently produced artifact; and
-- explicit acknowledgment that verification was not performed.
+When a command can test a material claim, `verify --run` records the execution and
+exit code (`RIF-DELEGATE-002`). An inspection recorded with `--check` remains an
+assertion by the driver. Judge both by their relevance and scope: a passing test
+of unrelated behavior does not outweigh a source inspection that exposes the
+defect. LLM judges can help prioritize review but are not ground truth.
 
-LLM judges can help prioritize review but are not ground truth. A record is useful
-only when it states what really happened; never fabricate checks to complete one.
-
-Prefer a check the coordinator executes (`verify --run`) to one you state
-(`--check`): the first records an exit code, the second only your word
-(`RIF-DELEGATE-002`). Tell the user something is verified only after a check has
-run. Record checks while their evidence is available so they survive context compaction.
+For an exchange that develops ideas without factual or acceptance checks, use
+`--result not_performed` and preserve the contribution and open questions in
+`--note`. Where some claims were checked, record those checks and their limits.
+Distinguish developing a possibility, changing a view, and adopting a decision;
+they say different things about the outcome. The
+[outcome examples](PROTOCOLS.md#record-the-outcome) show how to record each.
 
 When verification fails, preserve the peer's native session and send a focused
 follow-up. Do not restart from a compressed summary unless the native session is
@@ -211,35 +267,18 @@ permission to publish its contents, identifiers, statistics, or personal context
 
 ## How knowledge compounds
 
-Preserve each significant lesson through five layers:
+Each run has two useful outputs: its contribution to the current task and evidence
+about how the collaboration worked. Record the checks, corrections, adoption or
+rejection, and unresolved questions while the context is available. A failure or a
+rejected suggestion can be as informative as an adopted one.
 
-1. Keep source evidence private; preserve reusable lessons in `NOTES.md`.
-2. Generalize durable judgment in this playbook.
-3. Put always-needed behavior in `SKILL.md`.
-4. Encode fragile mechanics in the coordinator or an adapter.
-5. Add a focused regression test for executable invariants.
+Keep these observations distinct. `view_changed` is the driver's report, an exit
+code measures the command that ran, and a user preference expresses a preference.
+None is a general quality score. The coordinator captures mechanical facts; the
+driver's `--note` supplies the outcome and rationale those facts cannot express.
 
-Use stable identifiers when a lesson spans layers. Each carries its basis: `[F]`
-operational experience (private source records are not distributed), `[R]`
-published research or vendor guidance, `[T]` convention or an untested hypothesis. A `[T]` or
-`[R]` rule bends more readily than an `[F]` one; say why when bending any of them.
-
-- `RIF-EPISTEMIC-001` [F] — elicit independently before comparison.
-- `RIF-EPISTEMIC-002` [R] — confidence is not evidence.
-- `RIF-EPISTEMIC-003` [T] — record the prediction before consulting.
-- `RIF-SESSION-001` [F] — identify sessions explicitly.
-- `RIF-DELEGATE-001` [F] — verify before integration.
-- `RIF-DELEGATE-002` [R] — an executed check outranks an asserted one.
-- `RIF-AUTHORITY-001` [T] — do not expand authority implicitly.
-- `RIF-AUTHORITY-002` [F] — match tool scope to the acceptance criteria.
-- `RIF-AUTHORITY-003` [F] — bound every tool the scope does not name.
-- `RIF-CONTEXT-001` [T] — prefer references and artifacts to transcript transfer.
-- `RIF-FAILURE-001` [F] — classify a peer failure before retrying it.
-- `RIF-COLLECTION-001` [F] — one installed skill owns each trigger.
-
-`tests/test_knowledge.py` fails when a document cites an identifier this list does
-not define.
-
-New research does not automatically become policy. Record its scope and caveats,
-observe it in real use, then promote it from `[R]` or `[T]` to `[F]` when it
-repeatedly improves outcomes.
+Field reviews can turn recurring observations into candidate skill changes and
+behavior cases. Test the changes on separate tasks before treating them as
+improvements. [Learning from runs](DESIGN.md#learning-from-runs) describes the
+current trace boundary, possible optimization and post-training uses, and the
+[rule provenance registry](DESIGN.md#rule-provenance) used across docs and tests.

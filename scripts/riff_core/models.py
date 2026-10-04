@@ -439,8 +439,9 @@ def request_warnings(request: RunRequest) -> list[dict[str, str]]:
         if request.mode != "delegate" and not request.driver_prediction:
             warn(
                 "no-driver-prediction",
-                "independent-first run has no driver_prediction; record the expected "
-                "answer and what would change it so the synthesis can report whether it did",
+                "independent-first run has no driver_prediction; record the starting "
+                "expectation or uncertainty when useful. If there is no prior position "
+                "to withhold, use driver_position=none; do not invent a prediction",
             )
     for participant in request.participants:
         if participant.harness != "claude" or participant.tools == "none":

@@ -254,7 +254,16 @@ class RequestWarningTests(unittest.TestCase):
                 {"task": "I think option B is right. Critique that.",
                  "driver_position": "provided", "driver_position_text": "Option B."},
             ),
-            ("no-driver-prediction", {"driver_prediction": None}, {}),
+            (
+                "no-driver-prediction",
+                {"driver_prediction": None},
+                {"driver_prediction": "Uncertain whether task order or terminology is the problem."},
+            ),
+            (
+                "no-driver-prediction",
+                {"mode": "discuss", "driver_prediction": None},
+                {"mode": "discuss", "driver_position": "none", "driver_prediction": None},
+            ),
             (
                 "scope-lacks-web",
                 {"task": web_task},

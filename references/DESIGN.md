@@ -9,6 +9,8 @@ dyad into a driver-neutral, multi-participant system.
 
 - [Purpose and boundary](#purpose-and-boundary)
 - [Knowledge architecture](#knowledge-architecture)
+- [Learning from runs](#learning-from-runs)
+- [Rule provenance](#rule-provenance)
 - [Coordination topology](#coordination-topology)
 - [Contracts and adapters](#contracts-and-adapters)
 - [State and observability](#state-and-observability)
@@ -17,6 +19,12 @@ dyad into a driver-neutral, multi-participant system.
 - [Deliberate non-goals](#deliberate-non-goals)
 
 ## Purpose and boundary
+
+Riff supports useful collaboration now and preserves evidence for improving it over
+time. A peer may develop an idea, question the framing, assess a proposal, or deliver
+a bounded task. The driver owns the resulting judgment without being treated as
+the intellectual authority. Exploration can end with a better question rather than
+agreement or a decision.
 
 The skill owns judgment:
 
@@ -41,9 +49,10 @@ context compaction mid-session; the coordinator's output is the one instruction
 surface it reads on every call, so obligations that must survive (read the
 artifact, verify, report denied access) travel there. They are derived from the run
 itself rather than generic: a delegation asks for acceptance checks and an
-integration record, a consult asks for the claims checked and whether the driver's
-recorded prediction changed (quoting it back), a failure names its recovery, and a
-run where no peer answered asks for an honest `not_performed`. An inspection or exploratory contribution needs a different
+integration record, a consult asks for the claims checked and how the driver's
+starting expectation or uncertainty developed (quoting the baseline back), a
+failure names its recovery, and a run where no peer answered asks for an honest
+`not_performed`. An inspection or exploratory contribution needs a different
 record from an executable acceptance check.
 
 Adapters compile the common contract into native harness operations. Riff does not
@@ -68,16 +77,87 @@ field observation / research
      ┌──────┴────────┐
      ▼               ▼
   SKILL.md       PROTOCOLS.md
-always-active     mode-specific
+entrypoint        mode-specific
      │               │
      └──────┬────────┘
             ▼
  coordinator/adapters + focused tests
 ```
 
-Promote a lesson rather than merely moving text: observation → general principle →
-runtime rule → executable invariant → regression test. Keep volatile harness flags
-in `HARNESSES.md` and their authoritative behavior in adapter tests.
+Promote a lesson according to what it changes: record publication-safe rationale in `NOTES.md`,
+explain durable judgment in `PLAYBOOK.md`, and put always-needed guidance in
+`SKILL.md`. Encode mechanical invariants in code and focused tests; evaluate
+judgment through fresh-agent behavior cases. Every lesson need not become an
+instruction in every layer. Keep volatile harness flags in `HARNESSES.md` and
+their executable contract in adapter tests.
+
+## Learning from runs
+
+Run records belong to the operator and stay in their configured local storage.
+They can support private review, candidate improvements, evaluation on separate
+tasks, and deliberate adoption. Riff does not upload these records to this
+repository or a shared dataset. Using a configured peer still sends its task and
+context through that harness and provider; local record storage does not imply
+local-only inference.
+
+Skill optimization and model post-training are distinct potential consumers.
+[SkillOpt](https://github.com/microsoft/SkillOpt) edits skill text using scored
+trajectories while keeping model weights frozen, with a held-out validation gate
+for candidate changes. Curated demonstrations or preference examples could instead
+support model post-training. Riff currently supplies neither an optimizer
+integration nor a training-data exporter.
+
+The existing records connect participants, session handles, artifact paths and
+hashes, failures, usage, initial expectations, checks, and integration reports.
+A driver's `verify --note` can preserve a useful reframe, reasons for adopting or
+rejecting it, and remaining questions. Keep execution success, verified claims,
+subjective usefulness, and user feedback distinguishable. Adoption is not a label
+of correctness, and rejected or failed work is useful evidence too.
+
+These records are not self-contained replay data. Tasks and prompts are hashed;
+recovering their contents depends on retained requests or native transcripts.
+Driver synthesis and user feedback require the linked driver conversation. The
+checkout fingerprint records HEAD and a dirty-file count, not an exact snapshot.
+Skill and harness versions are not comprehensively pinned in the run record.
+
+A future versioned export layer should assemble selected runs with recoverable
+inputs, relevant artifacts and transcript excerpts, versions, outcome evidence,
+and explicit missing-data markers. Exported content needs deliberate selection and
+redaction rather than copying all ambient session history. The coordinator should
+remain useful without an optimizer or training service.
+
+For evaluation, separate related runs by task or project when constructing train,
+validation, and test sets; follow-ups from the same problem are not independent
+examples. Replay can test a proposed improvement; a historical association between
+consulting and success alone cannot show that consulting caused the improvement.
+
+## Rule provenance
+
+Stable identifiers link guidance, observations, and tests. Their labels describe
+where the rationale comes from: `[F]` operational experience, `[R]` published
+research or vendor guidance, `[T]` a convention or untested hypothesis. Private
+source records are not distributed; `NOTES.md` preserves reusable lessons.
+They do not rank instruction authority. In particular, user authority boundaries
+remain binding regardless of the label on a rule.
+
+- `RIF-EPISTEMIC-001` [F] — elicit independently before comparison.
+- `RIF-EPISTEMIC-002` [R] — confidence is not evidence.
+- `RIF-EPISTEMIC-003` [T] — record the starting expectation or uncertainty when useful.
+- `RIF-SESSION-001` [F] — identify sessions explicitly.
+- `RIF-DELEGATE-001` [F] — verify before integration.
+- `RIF-DELEGATE-002` [R] — distinguish recorded execution from reported inspection;
+  assess each check's relevance and scope.
+- `RIF-AUTHORITY-001` [T] — do not expand authority implicitly.
+- `RIF-AUTHORITY-002` [F] — match tool scope to the acceptance criteria.
+- `RIF-AUTHORITY-003` [F] — bound every tool the scope does not name.
+- `RIF-CONTEXT-001` [T] — prefer references and artifacts to transcript transfer.
+- `RIF-FAILURE-001` [F] — classify a peer failure before retrying it.
+- `RIF-COLLECTION-001` [F] — one installed skill owns each trigger.
+
+`tests/test_knowledge.py` checks references against this registry. Keep the source,
+scope, and caveats when updating a rule; field evidence on one model or task does
+not establish a universal law. New research can motivate a test before it changes
+the operating guidance.
 
 ## Coordination topology
 
@@ -176,8 +256,8 @@ checkout at dispatch, status, and verification with its history. It does not
 duplicate full prompts or artifacts. Turn records store a prompt digest, artifact
 path and hash, native session handle, timing, usage, cost where the harness reports
 it, permission denials, the checkout fingerprint at settle, and error. Comparing the
-two fingerprints tells a reader whether files moved while the peer was reading
-them.
+two fingerprints can reveal a changed HEAD or dirty-file count, but cannot
+establish that file contents stayed unchanged while the peer was reading them.
 
 The coordinator emits records automatically. The driver only appends verification
 and integration truth; an empty, explicit `not_performed` is preferable to a
@@ -195,9 +275,14 @@ independent-first run without a `driver_prediction`; a task that needs the web
 given a scope without it; a context file a Claude peer cannot read; a write peer in
 a main checkout rather than a worktree; and fan-out beyond five participants.
 These heuristics warn rather than reject because each pattern has legitimate
-exceptions, and every message names its remedy. `driver_prediction` is stored in the manifest and never sent to a peer;
+exceptions, and every message names its remedy. `driver_prediction`
+is stored in the manifest and never sent to a peer;
 with `verify --view-changed` it makes "did consulting change the decision?" a
-recorded fact rather than a recollection (`RIF-EPISTEMIC-003`).
+recorded driver assessment rather than a later recollection (`RIF-EPISTEMIC-003`).
+The field may instead state uncertainty; `driver_position: none` represents no
+prior position and does not require a prediction. `view_changed` remains null
+when not applicable. A useful exploration with no checks can record
+`not_performed` and its contribution in `note`, without claiming verification.
 
 An initial `run` returns both the aggregate run result and the result of the turns
 it just executed; these are identical on round one. A later `reply` keeps them
@@ -232,9 +317,11 @@ Tool scope has four shared values: `none`, `read`, `read+web`, and `write`.
 `read+web` is read-only file access plus outbound network fetch (web search and
 URL fetch); it grants no write, shell, or edit authority. Adapters report
 whether the scope is native, sandboxed, or prompt-enforced, and each adapter
-supports only the scopes it can enforce natively — unsupported scopes fail
-closed at command construction. Claude Code and Codex support `read+web`. On
-Claude it needs both halves of its permission model: `--tools` to expose
+rejects unsupported scopes at command construction. Enforcement limits remain
+visible: Hermes read scope is prompt-enforced, and Codex sandboxing does not
+remove every tool that a narrower scope asks the peer to avoid. Claude Code and
+Codex support `read+web`. On Claude it needs both halves of its permission model:
+`--tools` to expose
 WebSearch and WebFetch, and `--allowedTools` to pre-approve them under the
 non-interactive permission mode. Exposure alone looks correct and fails silently;
 see `HARNESSES.md`. Riff does not imply authority from a mode name.
@@ -284,11 +371,16 @@ skip or assertions the runner silently ignores.
 Two datasets drive forward tests with fresh agents; neither runs in CI because each
 costs model calls. `tests/trigger_cases.json` holds should- and should-not-trigger
 prompts, weighted toward near-misses; rerun it after any description change.
-`tests/behavior_cases.json` holds scenarios drawn from field failures, each tied to
-a rule and to observable expectations; run each with and without the change under
-test, judge the transcript and run manifest rather than the driver's summary, and
-keep private results outside the repository; publish only approved, sanitized lessons. A change that does not move a behavior case is not yet
-justified by evidence.
+`tests/behavior_cases.json` holds scenarios drawn from field failures and explicit
+design aims, with their basis labelled and tied to observable expectations. Run
+each with and without the change under test and judge the transcript and run
+manifest rather than the driver's summary. Keep private results outside the
+repository; publish only explicitly approved, sanitized findings. Passing
+deterministic checks establishes the mechanics, not an improvement in model
+behavior. Compare old and new skills in fresh sessions across intended
+drivers, inspecting contributions, synthesis, limitations, time, and token use.
+Exploration cases also assess whether a useful reframe survives and whether the
+response fits the user's question. Report unmeasured changes as unmeasured.
 
 Operators may use their own run store as a private evaluation corpus. Manifests
 record mode, participants, timing, results, warnings, verification kinds,

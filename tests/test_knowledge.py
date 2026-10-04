@@ -28,26 +28,27 @@ def knowledge_files() -> list[Path]:
 
 class KnowledgeTests(unittest.TestCase):
     def test_every_cited_rule_id_is_defined_once_with_a_basis(self) -> None:
-        playbook = (ROOT / "references" / "PLAYBOOK.md").read_text()
-        defined = [match.group(1) for match in DEFINITION.finditer(playbook)]
+        design = (ROOT / "references" / "DESIGN.md").read_text()
+        defined = [match.group(1) for match in DEFINITION.finditer(design)]
         self.assertEqual(len(defined), len(set(defined)), "duplicate rule definitions")
         cited: dict[str, set[str]] = {}
         for path in knowledge_files():
             for rule in RULE_ID.findall(path.read_text()):
                 cited.setdefault(rule, set()).add(str(path.relative_to(ROOT)))
         undefined = {rule: sorted(files) for rule, files in cited.items() if rule not in defined}
-        self.assertEqual(undefined, {}, "cited rule IDs missing from PLAYBOOK.md")
+        self.assertEqual(undefined, {}, "cited rule IDs missing from DESIGN.md")
 
-    def test_skill_example_request_is_valid_and_warning_free(self) -> None:
-        skill = (ROOT / "SKILL.md").read_text()
-        block = re.search(r"```json\n(.*?)\n```", skill, re.DOTALL)
-        self.assertIsNotNone(block, "SKILL.md must show a request example")
-        value = json.loads(block.group(1))
-        with tempfile.TemporaryDirectory() as cwd:
-            for participant in value["participants"]:
-                participant["cwd"] = cwd
-            request = RunRequest.from_dict(value)
-            self.assertEqual(request_warnings(request), [])
+    def test_documented_requests_are_valid_and_warning_free(self) -> None:
+        for name in ("SKILL.md", "README.md", "references/PROTOCOLS.md"):
+            blocks = re.findall(r"```json\n(.*?)\n```", (ROOT / name).read_text(), re.DOTALL)
+            self.assertTrue(blocks, f"{name} must show a request example")
+            for index, block in enumerate(blocks):
+                with self.subTest(document=name, example=index), tempfile.TemporaryDirectory() as cwd:
+                    value = json.loads(block)
+                    for participant in value["participants"]:
+                        participant["cwd"] = cwd
+                    request = RunRequest.from_dict(value)
+                    self.assertEqual(request_warnings(request), [])
 
     def test_skill_body_stays_under_the_documented_line_limit(self) -> None:
         body = (ROOT / "SKILL.md").read_text().split("---", 2)[2]
@@ -75,8 +76,8 @@ class KnowledgeTests(unittest.TestCase):
         self.assertGreater(sum(bool(case.get("near_miss")) for case in negative), len(negative) // 2)
 
         behaviors = json.loads((ROOT / "tests" / "behavior_cases.json").read_text())["cases"]
-        playbook = (ROOT / "references" / "PLAYBOOK.md").read_text()
-        defined = {match.group(1) for match in DEFINITION.finditer(playbook)}
+        design = (ROOT / "references" / "DESIGN.md").read_text()
+        defined = {match.group(1) for match in DEFINITION.finditer(design)}
         for case in behaviors:
             with self.subTest(case["id"]):
                 self.assertIn(case["rule"], defined)

@@ -1,71 +1,30 @@
 # Riff
 
 Riff lets Claude Code, Codex, Pi, and Hermes consult, discuss, or delegate to one
-another through one shared Agent Skill.
+another through one shared Agent Skill. Bring in a peer to notice something you
+missed, develop an idea further, challenge the question, or take on a bounded task.
 
-It combines two things:
+The current interactive harness is the driver. It gives peers context, follows up,
+and takes responsibility for what it adopts. Any participant can change the
+framing; being the driver does not make its first answer the right one.
 
-- accumulated guidance for productive cross-model collaboration; and
-- a deterministic coordinator for processes, native sessions, artifacts, timeouts,
-  permissions, and traces.
+For example, an exploratory exchange might look like this:
 
-The current interactive harness remains the driver. Peers return independent
-artifacts; the driver verifies and synthesizes them.
+> **You:** Discuss this documentation idea with Codex. Help develop it before we
+> choose a structure.
+>
+> **Peer contribution:** These readers may need different starting points: some
+> want to accomplish a task, while others want to understand the underlying model.
+>
+> **Driver:** Would two entrances make readers choose before they know what they need?
+>
+> **Peer:** They might. The same reader could start with a task and need an
+> explanation halfway through. Try a task walkthrough with explanations at those
+> points, and compare it with separate entrances.
 
-```text
-Claude Code / Codex / Pi / Hermes
-               │ current driver
-               ▼
-          shared Riff skill
-               │
-               ▼
-         local coordinator
-        ┌──────┼──────┐
-        ▼      ▼      ▼
-     Claude  Codex    Pi ── local or hosted models
-                       └── Hermes
-```
-
-## Why both a skill and code?
-
-The skill contains the judgment that made the original Riff useful:
-
-- independent-first elicitation;
-- openness to reframing;
-- peer rather than master/subordinate posture;
-- persona and persuasion discipline;
-- bounded discussion;
-- explicit delegation contracts; and
-- verification before integration.
-
-The coordinator makes fragile mechanics reproducible:
-
-- unique participant and session identity;
-- multiple instances of the same harness;
-- native start and resume;
-- Pi `agent_settled` handling;
-- parallel fan-out and sequential pipelines;
-- write-directory collision guards and request warnings;
-- recursion limits;
-- verification checks it executes itself; and
-- automatic privacy-conscious run records whose output tells the driver what to do
-  next, so the obligations survive even if the skill text leaves its context.
-
-See [the playbook](references/PLAYBOOK.md),
-[protocols](references/PROTOCOLS.md), [harness notes](references/HARNESSES.md),
-and [design](references/DESIGN.md).
-
-## Supported adapters
-
-| Harness | Start/reply | Model controls | Tool scope |
-|---|---|---|---|
-| Claude Code | Explicit session UUID | model, effort, configured provider, extra read dirs, allowed test commands | none/read/read+web/write |
-| Codex | Explicit thread ID | model, reasoning effort, OpenAI/local mode | sandboxed none/read/read+web/write |
-| Pi | Persistent JSONL RPC | provider, model, thinking | none/read/write |
-| Hermes | Explicit quiet-CLI session | provider, model, max turns | none/read; write disabled |
-
-Use Pi for llama.cpp/vLLM-hosted models when agent features are required. Those
-servers supply inference, while Pi supplies sessions, tools, and settlement.
+The follow-up turns an audience distinction into two concrete structures to try.
+A review might instead uncover a defect; a delegation might deliver a patch with
+checks the driver can run.
 
 ## Install one shared copy
 
@@ -87,116 +46,143 @@ skills:
     - ~/.agents/skills
 ```
 
-### Migrate overlapping skills safely
-
-Skill selection happens before Riff's body can arbitrate a collision. After Riff
-passes a live validation, make older broad-triggering `codex` or `qwen-peer` skills
-non-automatic while keeping them recoverable:
-
-- In Claude Code, add `disable-model-invocation: true` to an old skill's frontmatter
-  if it should remain available for explicit invocation.
-- In Hermes, add an overlapping builtin name to `skills.disabled` while keeping
-  `riff` available through `external_dirs`.
-- Move a superseded directory outside scanned skill roots instead of deleting it
-  until the migration has been exercised from every intended driver.
-
-Then use a fresh session for both a positive prompt (for example, “ask a Codex peer
-to review this”) and a negative prompt that merely mentions Codex. Confirm the
-positive case selects Riff and the negative case stays solo.
-
-A configured Codex MCP server is separate from the old skill. Riff's current Codex
-adapter uses `codex exec` JSONL, so a connected MCP remains a parallel raw route
-that Claude could choose directly. For a strict migration probe, temporarily
-disable or remove that MCP after preserving its definition, then restore it later
-only if a deliberate escape hatch is wanted.
-
-## Check the installation
+Check which harnesses are available:
 
 ```bash
 python3 scripts/riff.py capabilities
-python3 -m unittest discover -s tests -v
 ```
 
-No third-party Python dependency is required.
+Riff requires no third-party Python dependency; peers use their installed harnesses
+and configured providers. If you have older peer skills installed, follow the
+[migration notes](references/HARNESSES.md#migrate-overlapping-skills-safely) to
+avoid competing triggers.
 
-For deterministic driver probes, the supported executable overrides are
-`RIFF_CLAUDE_BIN`, `RIFF_CODEX_BIN`, `RIFF_PI_BIN`, and `RIFF_HERMES_BIN`; use
-`RIFF_STATE_DIR` for isolated state. See
-[the harness notes](references/HARNESSES.md#diagnostics-and-test-seams).
+## Ask for a peer
 
-## Request example
+In a fresh session, ask naturally:
+
+- “Get Codex's independent take on why this test is flaky.”
+- “Discuss this early idea with Claude and help me see what it could become.”
+- “Have Pi investigate the parser failure, then check its findings.”
+- “Delegate this fix to Codex in a worktree and review the result.”
+
+Riff defaults to one peer. You can name several, select models or providers, or
+ask for another instance of the same harness. **Consult** gets an assessment or
+contribution; **discuss** continues through bounded rounds; **delegate** assigns a
+task with an explicit scope and acceptance checks. The driver handles the request
+format and coordinator commands.
+
+## Why a skill and a coordinator?
+
+The skill teaches the choices that make collaboration useful: when to withhold
+your answer, when to share a proposal, how to develop an idea without forcing
+agreement, and how to assess what comes back. The coordinator handles processes,
+exact native sessions, artifacts, timeouts, tool scopes, and records. Follow-ups
+return to the same peer session, and partial failures remain visible.
+
+```text
+current driver (Claude Code / Codex / Pi / Hermes)
+                       │ shared Riff skill
+                       ▼
+                local coordinator
+                 ├── Claude Code
+                 ├── Codex
+                 ├── Pi ── local or hosted models
+                 └── Hermes
+```
+
+| Harness | Sessions | Model controls | Tool scopes |
+|---|---|---|---|
+| Claude Code | Explicit session UUID | model, effort, configured provider | none/read/read+web/write |
+| Codex | Explicit thread ID | model, reasoning effort, OpenAI/local mode | sandboxed none/read/read+web/write |
+| Pi | Persistent JSONL RPC | provider, model, thinking | none/read/write |
+| Hermes | Explicit quiet-CLI session | provider, model, max turns | none/read; read is prompt-enforced; write disabled |
+
+Use Pi for llama.cpp/vLLM-hosted models when tools and sessions are needed. See
+[harness notes](references/HARNESSES.md) for controls and enforcement details.
+
+## Learn from the work
+
+Riff keeps run records in your configured local storage for your own use. It does
+not upload them to this repository or a shared dataset. Your selected harnesses
+and providers still process the task and context you send to peers.
+
+Those records can help you improve future collaboration. Run and turn
+records connect participants, artifacts, failures, usage, the driver's initial
+expectations, and subsequent checks and decisions. They support field reviews and
+skill optimization; curated trajectories could also support model post-training.
+
+Those uses depend on distinguishing a completed turn from a correct answer, an
+executed check from an asserted inspection, and an adopted idea from a verified
+claim. The driver records what it actually checked and what the peer contributed.
+
+The current records are an evidence index, not a self-contained training dataset:
+reconstructing an exchange also needs its artifacts and available native/driver
+transcripts. Riff does not automatically optimize skills or train models. See
+[the learning-loop design](references/DESIGN.md#learning-from-runs) for the current
+boundary and proposed next steps.
+
+## Use the coordinator directly
+
+Most users can let the driver handle this. For a direct consult, save a request as
+`request.json`, replacing the working directory and context path with your own:
 
 ```json
 {
   "version": 1,
   "mode": "consult",
-  "task": "Find the strongest flaw in this proposed design.",
+  "task": "Assess this design's assumptions. Explain any better framing.",
   "origin_harness": "claude",
   "participants": [
-    {
-      "id": "codex-review",
-      "harness": "codex",
-      "cwd": "/absolute/project/path",
-      "tools": "read",
-      "params": {"reasoning_effort": "high"}
-    },
-    {
-      "id": "qwen-local",
-      "harness": "pi",
-      "provider": "llama.cpp",
-      "model": "qwen",
-      "cwd": "/absolute/project/path",
-      "tools": "read"
-    }
+    {"id": "codex-review", "harness": "codex", "cwd": "/absolute/project/path",
+     "tools": "read", "params": {"reasoning_effort": "high"}}
   ],
-  "coordination": {
-    "dispatch": "broadcast",
-    "independent_first": true,
-    "max_rounds": 3
-  },
-  "driver_prediction": "The migration ordering; anything deeper changes the plan.",
+  "driver_position": "withheld",
+  "driver_prediction": "Expect migration ordering to be the main weakness.",
   "context_refs": ["docs/design.md"],
-  "constraints": ["Do not modify files"],
-  "acceptance_criteria": ["Cite file:line for each concern"],
-  "out_of_scope": ["Do not propose a storage rewrite"]
+  "acceptance_criteria": ["Support factual concerns with file:line evidence"],
+  "out_of_scope": ["Implementation changes"]
 }
 ```
 
-Run it:
-
 ```bash
-python3 scripts/riff.py validate --request request.json   # errors and warnings
-python3 scripts/riff.py run --request request.json        # prints the run ID first
+python3 scripts/riff.py validate --request request.json
+python3 scripts/riff.py run --request request.json
 ```
 
-The result points to participant artifacts and the run manifest, lists any tools a
-peer was denied, and carries `next_steps` for the driver. Continue a native session
-with `riff.py reply`, then record verification; `--run` commands are executed and
-their exit codes recorded, while `--check` text is labelled as asserted:
+Read the returned artifact files, then follow the result's `next_steps`. For a
+consult where you inspected the cited code, a record might be:
 
 ```bash
 python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
-  --run "python3 -m unittest discover -s tests" --check "Read the diff" --integrated
+  --result passed --check "Compared the migration claim with src/migrate.py" \
+  --view-changed yes --note "The ordering concern holds; implementation is pending."
 ```
 
-`run` prints the run ID on stderr before it blocks. For long runs, or a driver whose
-shell caps one call's duration, use `run --detach` and then `wait --run-id <uuid>`
-(bounded; call again while it reports running). For long Pi/Qwen turns, inspect the
-run from another shell:
+Only record that inspection after doing it. `--check` is an asserted inspection;
+`--run` executes a check and records its exit code. Use `--result not_performed`
+when nothing was checked, and `--integrated` only after applying a change or
+adopting a decision. [Protocols](references/PROTOCOLS.md#record-the-outcome) cover
+exploration, partial verification, and delegation.
 
-```bash
-python3 scripts/riff.py progress --run-id <uuid> --participant qwen-local
-```
-
-The default live view reports RPC delta and durable-session metadata without
-exposing reasoning or answer contents. `--previews` explicitly opts into short
-content previews.
+`run` prints its ID on stderr before blocking. For long runs or a driver with a
+per-call time limit, use `run --detach`, then bounded `wait --run-id <uuid>` calls.
+Use `progress --run-id <uuid>` for live Pi metadata; `--previews` opts into content.
+Continue with `reply --run-id <uuid> --participant <id> --prompt "..."`.
 
 ## Development
 
-Keep tests focused on invariants. Process tests use fake harness executables, so
-they validate command construction, parsing, persistence, and settlement without
-spending model tokens. Live model smoke tests are opt-in and should exercise every
-driver direction before old installed skills are retired.
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Tests cover request contracts, coordinator behavior, and fake harness processes.
+Fresh-agent behavior checks are separate: passing a process test does not establish
+that a model follows the skill well. See [testing strategy](references/DESIGN.md#testing-strategy)
+and [isolated test seams](references/HARNESSES.md#diagnostics-and-test-seams).
+
+Start with [the playbook](references/PLAYBOOK.md) for collaboration choices,
+[protocols](references/PROTOCOLS.md) for operational detail, and
+[design lessons](references/NOTES.md) for the rationale behind decisions.
 
 Riff uses the MIT License.

@@ -22,6 +22,15 @@ class AdapterProcessTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.cwd = self.root / "repo"
         self.cwd.mkdir()
+        environment = patch.dict(
+            os.environ,
+            {
+                "RIFF_STATE_DIR": str(self.root / "state"),
+                "CODEX_HOME": str(self.root / "codex"),
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()

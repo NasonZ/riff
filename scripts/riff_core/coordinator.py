@@ -754,10 +754,13 @@ class Coordinator:
             )
         parts.append("Authority\n" + authority)
         parts.append(
-            "Response\nReturn a self-contained artifact. Give each material claim its "
-            "evidence (file:line, command and result, or source URL), or label it "
-            "unverified. Surface assumptions and known gaps. If the framing is wrong, say "
-            "so and propose the better question."
+            "Response\nReturn a self-contained artifact suited to the task. Give each "
+            "material factual claim its evidence (file:line, command and result, or "
+            "source URL), or label it "
+            "unverified. Explain proposals and judgments in relation to the task's aims; "
+            "do not present them as verified facts. Surface assumptions and known gaps. "
+            "For exploration, develop useful possibilities without forcing a decision. "
+            "If the framing is wrong, say so and propose the better question."
         )
         return "\n\n".join(parts)
 
@@ -995,20 +998,35 @@ def _next_steps(
             "--integrated (only once you have applied the change)."
         )
     else:
-        # Consults rarely have a test to run; reading claims against the code or a
-        # source is a real check, recorded as asserted (field: drivers skipped the
-        # record when the only template offered was a test command).
+        # Inspections need an explicit result; the old handoff omitted it and could
+        # not be executed without repair. Ideas can also contribute without checks.
         steps.append(
-            "Check the decisive claims against the code or the cited sources, then "
-            f"record what you did: {record} --check '<what you read or compared>' "
-            "[--run '<command that confirms a claim>'] --view-changed yes|no."
+            "Check material factual claims against code, tests, or cited sources. "
+            "For a supported claim you inspected, record: "
+            f"{record} --result passed --check '<claim checked and source>' "
+            "--note '<scope of the check and remaining uncertainty>'. "
+            "Use partial or failed when appropriate; --run '<check command>' executes "
+            "a check and derives the result when --result is omitted."
+        )
+        steps.append(
+            "Assess ideas against the user's aims without treating usefulness as factual "
+            "verification. If no factual or acceptance checks ran, record: "
+            f"{record} --result not_performed --note '<contribution and open questions>'. "
+            "Add --view-changed yes|no when there was a prior view to compare; otherwise "
+            "omit it and explain in the note. Preserve what was adopted or rejected and why."
         )
     if prediction:
         steps.append(
-            f'Your recorded prediction was: "{_clip(prediction, 240)}". Tell the user '
-            "whether the peers changed it, and what did."
+            f'Your starting expectation or uncertainty was: "{_clip(prediction, 240)}". '
+            "Explain what the peer changed, clarified, or left open. Do not invent a "
+            "change of mind when there was no prior view."
         )
-    steps.append("Never tell the user something was verified unless a check ran.")
+    steps.append(
+        "Respond in the detail the task needs: attribute peer contributions, preserve "
+        "material disagreement and limitations, and give your judgment or next useful "
+        "question. Only call a claim verified after a relevant check; a completed turn "
+        "or an adopted idea alone is not verification."
+    )
     return steps
 
 

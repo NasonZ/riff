@@ -8,6 +8,7 @@ behavior differs; adapter tests are more authoritative than historical examples.
 
 - [Shared invariants](#shared-invariants)
 - [Diagnostics and test seams](#diagnostics-and-test-seams)
+- [Migrate overlapping skills safely](#migrate-overlapping-skills-safely)
 - [Claude Code](#claude-code)
 - [Codex](#codex)
 - [Pi](#pi)
@@ -55,6 +56,41 @@ These are executable paths, not arbitrary argument strings. Keep model, provider
 reasoning, and tool controls in the validated participant request. A forward probe
 must use the exact variable names above; guessed aliases can silently select a real
 harness or the normal state directory instead of the intended fixture.
+
+The process tests use fake executables and isolate both Riff state and the Codex
+source configuration in temporary directories, so they do not depend on the
+user's installed harness configuration.
+
+For real Codex turns, use a persistent writable state directory rather than `/tmp`.
+The current Codex adapter resolves its sanitized home through `RIFF_STATE_DIR`
+(or the default state root), independently of the CLI's `--state-dir`. Set that
+environment variable consistently as well when relocating real Codex runs.
+
+Peer latency depends on the task, harness, model, and provider. The default turn
+timeout is 30 minutes; use exact-session recovery when a timed-out session survives.
+
+## Migrate overlapping skills safely
+
+Skill selection happens before Riff's body can arbitrate a collision. After Riff
+passes a live validation, make older broad-triggering `codex` or `qwen-peer` skills
+non-automatic while keeping them recoverable:
+
+- In Claude Code, add `disable-model-invocation: true` to an old skill's frontmatter
+  if it should remain available for explicit invocation.
+- In Hermes, add an overlapping builtin name to `skills.disabled` while keeping
+  `riff` available through `external_dirs`.
+- Move a superseded directory outside scanned skill roots instead of deleting it
+  until the migration has been exercised from every intended driver.
+
+Then use a fresh session for both a positive prompt (for example, “ask a Codex peer
+to review this”) and a negative prompt that merely mentions Codex. Confirm the
+positive case selects Riff and the negative case stays solo.
+
+A configured Codex MCP server is separate from the old skill. Riff's current Codex
+adapter uses `codex exec` JSONL, so a connected MCP remains a parallel raw route
+that Claude could choose directly. For a strict migration probe, temporarily
+disable or remove that MCP after preserving its definition, then restore it later
+only if a deliberate escape hatch is wanted.
 
 ## Claude Code
 
@@ -163,6 +199,9 @@ When Codex is the driver, its own sandbox also applies to `riff.py`. Under
 writable roots, which can cause a read-only filesystem error. Request escalation
 for the Riff command, or pass `--state-dir` inside a
 writable root and keep using that same root for `reply`, `progress` and `verify`.
+When a Codex peer is involved, also set `RIFF_STATE_DIR` to that persistent writable
+root: its sanitized home resolves through the environment independently of
+`--state-dir`. See [diagnostics](#diagnostics-and-test-seams).
 
 Codex ships a built-in review subcommand that usually beats a hand-written review
 prompt. The adapter does not wrap it; a driver may run it directly for a one-shot

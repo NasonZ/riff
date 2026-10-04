@@ -5,57 +5,66 @@ description: Coordinate one or more independent AI harness peers for consultatio
 
 # Riff collaboration
 
-Coordinate independent peers without treating any harness or model as the
-authority. The current interactive harness is the driver: it chooses participants,
-mediates follow-ups, verifies claims, and synthesizes. The bundled coordinator owns
-processes, sessions, artifacts, timeouts, and records; do not hand-roll native CLI
-calls for anything an adapter supports.
+Bring another model into the work to contribute an independent assessment, develop
+an idea, challenge a framing, or complete a bounded task. Give it enough context to
+contribute and room to change your mind. The current interactive harness is the
+driver: it chooses participants, mediates follow-ups, and takes responsibility for
+what it adopts. Driver and peer are coordination roles, not capability ranks.
 
-## Load the relevant knowledge
+The bundled coordinator handles processes, exact native sessions, artifacts,
+timeouts, and records. Use it for operations an adapter supports. Those records
+also support learning from real runs: preserve what was checked, what changed,
+and what remains uncertain without forcing the conversation into a fixed report.
 
-Resolve `RIFF_ROOT` to the directory containing this file. Read only what the
-decision in front of you needs:
+## Choose the contribution
 
-- [references/PLAYBOOK.md](references/PLAYBOOK.md) — before a consequential consult,
-  a multi-peer synthesis, or a delegation whose output will be integrated.
-- [references/PROTOCOLS.md](references/PROTOCOLS.md) — discussions, several
-  participants, stopping, write-capable delegation.
-- [references/HARNESSES.md](references/HARNESSES.md) — only the section for the
-  harness you are choosing parameters for, debugging, or recovering.
-- [references/DESIGN.md](references/DESIGN.md) — when changing Riff itself.
+Use the user's purpose to shape the request. An independent check needs your answer
+withheld; critique needs the proposal itself; early exploration needs room to
+extend possibilities before judging them. A useful result can be a better question
+or an unresolved distinction, as well as a decision or a patch.
+
+- **Consult** — an assessment or contribution, usually from one peer.
+- **Discuss** — follow-up rounds to develop ideas or resolve questions; default
+  three settled turns per participant, with no obligation to use every round.
+- **Delegate** — a bounded artifact or task under an explicit contract.
+
+Peer turns can take many minutes. Use them when another perspective or a separate
+piece of work is worth that cost. Obey an explicit user roster. When asked only for
+“another model,” pick one complementary available peer and say which. Do not fan
+out simply because several harnesses are installed.
+
+## Prepare the context
+
+Set `driver_position` honestly:
+
+- `withheld` for an independent assessment: send the question and evidence without
+  your proposed answer. A later follow-up cannot undo initial anchoring.
+- `provided` for critique or development of your proposal: put the current view in
+  `driver_position_text`. Riff derives `independent_first: false`.
+- `none` when you have no position to provide or withhold.
+
+Use `driver_prediction` to record your starting expectation or uncertainty. It stays
+in the driver record and is never sent to the peer. For exploration, “No preferred
+structure yet; I want to understand the reader needs” is a useful baseline. Do not
+invent a prediction or a change of mind to complete a record.
+
+Invite reframing and direct attention to the problem (“check for lost-update
+races”) rather than assigning a persona. Assess factual claims by their evidence
+and ideas by their reasoning and fit to the user's aims; confidence, model
+reputation, and agreement do not establish either.
+
+Resolve `RIFF_ROOT` to the directory containing this file. Load detail when needed:
+
+- [references/PLAYBOOK.md](references/PLAYBOOK.md) — choosing between exploration,
+  critique, and independent assessment; handling disagreement or a consequential
+  synthesis. The ordinary one-peer workflow is below.
+- [references/PROTOCOLS.md](references/PROTOCOLS.md) — multi-turn discussions,
+  multiple participants, write delegation, or recording different kinds of outcome.
+- [references/HARNESSES.md](references/HARNESSES.md) — the relevant harness section
+  when choosing adapter parameters, debugging, or recovering.
+- [references/DESIGN.md](references/DESIGN.md) — changing Riff or working with its
+  traces and evaluation design.
 - [references/NOTES.md](references/NOTES.md) — reusable design lessons.
-
-## Keep the peer relationship honest
-
-A second model is worth consulting only when its view is independent and its claims
-are checked. So:
-
-- Withhold your own answer when the point is a second opinion (`driver_position:
-  withheld`); a shared view anchors the peer and cannot be unshared in a follow-up.
-  When the task is to critique your proposal, send it as `provided` and never call
-  the result independent.
-- Record what you expect before consulting (`driver_prediction`); it is stored,
-  never sent, and lets the synthesis say honestly whether the peer changed your view.
-- Invite the peer to reject the question's framing. Direct its attention ("check
-  for lost-update races"); do not give it a persona.
-- Weigh evidence, not fluency, confidence, agreement, or model reputation. Driver
-  and worker are coordination roles, not capability ranks.
-
-## Decide whether and how to use it
-
-Peer turns can take many minutes. Do not use Riff for questions answerable in one read,
-to avoid thinking the problem through yourself, or for first drafts, where a critic
-pulls toward premature convergence. It is not coding-only: strategy, research
-framing, and naming decisions often benefit most.
-
-- **Consult** — one or more independent analyses. Default to one peer.
-- **Discuss** — bounded, driver-mediated rounds with explicit native sessions;
-  default three settled turns per participant.
-- **Delegate** — a bounded artifact or task under a written contract.
-
-Obey an explicit user roster. When asked only for "another model," pick one
-complementary available peer and say which. Never fan out silently because several
-harnesses are installed.
 
 ## Run
 
@@ -65,114 +74,106 @@ python3 "$RIFF_ROOT/scripts/riff.py" validate --request request.json
 python3 "$RIFF_ROOT/scripts/riff.py" run --request request.json
 ```
 
-Fix what `validate` warns about before an expensive run; each warning names the
-remedy. `run` blocks until every peer settles, which can take many minutes, then
-returns JSON whose `next_steps` you should follow even if these instructions are no
-longer in your context. If your shell limits how long one call may run, start with
-`run --detach` and follow with `wait --run-id <id>`, which returns within about nine
-minutes; call it again while it reports `running`.
+Review validation warnings before an expensive run: fix a real mismatch, or explain
+why a heuristic does not apply. `run` returns artifact paths and `next_steps`; follow
+that handoff even if the skill text has left your context. For long runs or shells
+with a per-call limit, use `run --detach` and bounded `wait --run-id <id>` calls.
+Repeat `wait` while it reports `running`; its default bound is about nine minutes.
+
+A one-peer independent assessment (replace the paths with the task's real inputs):
 
 ```json
 {
   "version": 1,
   "mode": "consult",
-  "task": "Find the strongest unsupported assumption in this design.",
+  "task": "Assess this design's assumptions. Explain any better framing.",
   "origin_harness": "claude",
   "participants": [
     {"id": "codex-review", "harness": "codex", "cwd": "/abs/repo", "tools": "read",
      "params": {"reasoning_effort": "high"}}
   ],
   "driver_position": "withheld",
-  "driver_prediction": "Expect the cache invalidation path. A deeper structural flaw would change the plan.",
+  "driver_prediction": "Expect the cache invalidation path. A structural flaw would change the plan.",
   "context_refs": ["docs/design.md"],
-  "acceptance_criteria": ["Cite file:line for each concern"],
-  "out_of_scope": ["Do not propose a rewrite of the storage layer"]
+  "acceptance_criteria": ["Support factual concerns with file:line evidence"],
+  "out_of_scope": ["Implementation changes"]
 }
 ```
 
-Give every participant a unique `id`. Match tool scope to the acceptance criteria,
-not just the risk: `none`, `read`, `read+web` (Claude and Codex peers) to check external
-sources, or `write` with explicit user authority. Read the artifact files; the run
-JSON is a handoff, not the answer. For long turns, `progress --run-id <id>` inspects
-a live run from another call. Several-peer requests are in `PROTOCOLS.md`.
+Give every participant a unique `id`. Match tool scope to the task: `none` for
+reasoning without tools, `read` for inspection, `read+web` (Claude and Codex) for
+external sources, or `write` for authorized changes. Read the returned artifacts;
+the run JSON is a handoff, not the peer's answer. `progress --run-id <id>` can
+inspect a live run from another call.
 
-## Continue a discussion
+## Continue or delegate
+
+For example, to develop a peer's idea about documentation structure:
 
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" reply --run-id <run-id> --participant <id> \
-  --prompt "Here is the competing argument. What changes your view, if anything?"
+  --prompt "Walk a newcomer through one task. Where would they need an explanation, and how could the page offer it?"
 ```
 
-Riff resumes the exact native session; never use a harness's "continue latest".
-Target follow-ups at unresolved evidence rather than replaying the conversation, and
-continue a correction in the same session instead of starting a fresh run that
-pretends to remember. For cross-review, collect isolated artifacts first, then send
-opaque excerpts while keeping real provenance in your synthesis.
+Follow the question that remains: develop a promising idea, examine a disagreement,
+or correct a defect. Riff resumes the exact native session; never use “continue
+latest.” For an independent multi-peer comparison, collect isolated first artifacts
+before sharing excerpts, retaining provenance when using opaque labels.
 
-## Delegate
+For delegation, write the goal, context, inputs, output contract, authority,
+`out_of_scope`, and acceptance checks before launching. If the output cannot yet be
+specified, consult first. Read the delegation section of `PROTOCOLS.md` for dispatch
+shapes. Put each code writer in its own linked git worktree so you can review its
+diff and keep your changes separate. Claude write peers need explicit test-command
+prefixes in `params.allowed_commands`. Riff never grants commit, push, PR,
+messaging, or deployment authority implicitly.
 
-Write the contract before launching: goal, context references, inputs, output
-contract, authority, `out_of_scope`, and `acceptance_criteria` you will actually
-run. If you cannot write the acceptance criteria, consult first. Use `single`,
-`split` (a distinct `participant.task` each), `pipeline` (a declared artifact feeds
-the next stage), or `broadcast` for read-only alternatives only.
+## Assess, record, and respond
 
-Put each writer in its own linked git worktree, not the main checkout, so you can
-review its diff before integrating and your own edits cannot be swept into its
-commit. Let a
-Claude write peer run tests with `params.allowed_commands` (for example
-`["uv run pytest"]`); without it the shell is denied. Riff never grants commit,
-push, PR, messaging, or deployment authority implicitly.
-
-## Verify and synthesize
-
-Do not tell the user anything is verified until a check has run. Then record it:
+Check material factual claims against code, tests, or sources before relying on
+them. Assess proposals against the user's aims and explain your judgment. A useful
+idea is not thereby a verified fact. For a consult where you checked cited code:
 
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
-  --run "uv run pytest -q" --check "Read the diff of src/parser.py" \
-  --view-changed no --integrated
+  --result passed --check "Compared the cited claim with src/parser.py" \
+  --view-changed yes --note "The peer found a case my diagnosis missed; fix pending."
 ```
 
-`--run` commands are executed and their exit codes recorded; the result is derived
-from them, and a claimed `passed` that contradicts a failing command is rejected.
-`--check` records something you inspected as asserted, never as executed; for a
-consult, reading the peer's claims against the code or the cited sources is a real
-check, so record it rather than skipping the record because there was no test. Use
-`--result not_performed` when you checked nothing, and `--integrated` only once you
-have actually applied the result (changed files, adopted the decision). Re-verifying
-keeps the earlier record.
+Record only what you did. `--run` executes a check and derives the result from exit
+codes; `--check` records an inspection as asserted and requires `--result` when no
+command runs. With no checks, use `--result not_performed --note "..."` to preserve
+what the exchange contributed and what remains open. `--view-changed yes|no` records
+a change to an existing view; omit it when not applicable and explain in the note.
+Use `--integrated` only once you actually apply a change or adopt a decision.
+Re-verifying preserves the prior record. See `PROTOCOLS.md` for further examples.
 
-Report to the user in this shape, not as pasted peer output or a vote count:
-
-```text
-Riff <mode>: <participant = harness/model> · independence <withheld|provided>
-Expected: <driver_prediction> · Changed my view: <yes/no — what did it>
-Agreement · Disagreement · Decisive evidence
-Verified: <executed checks> | Asserted: <inspections> | Not verified: <claims>
-Peer limits: <denied tools, timeouts, missing participants>
-Judgment: <yours>
-```
+Respond at the level of detail the user needs. Attribute the peer's contribution,
+explain what it changed or opened up, preserve material disagreement, and distinguish
+checks from judgments and unknowns. Disclose denied access, failed participants,
+and other limitations that affect the result. Give your resulting judgment or the
+next useful question; a short consult can need only a few sentences. Keep a useful
+outcome record even when the user-facing response is brief. Records are private
+operator data: do not copy runs, transcripts, identifiers, or personal context into
+public docs, fixtures, commits, or external services without explicit permission
+for that disclosure.
 
 ## Gotchas
 
-
-- **A timeout is not a lost session.** Reply to the same participant with a short
-  "write your final answer now"; a surviving native session may remain recoverable, and a
-  failed turn does not spend a round. The default turn timeout is 30 minutes; raise
-  `timeout_seconds` for long delegations.
-- **Usage-limit and auth failures do not heal on retry.** `error_type` `rate_limit`
-  states the reset time; `auth` means fix credentials or pick another peer. Tell
-  the user; never substitute your own review under the peer's name.
-- **Denied tools leave silent gaps.** The run output lists `denied_tools`; say what
-  the peer could not access. A context file outside a Claude peer's cwd needs
-  `params.add_dirs`.
-- **Codex as driver:** its sandbox makes the default state directory read-only;
-  request escalation for `riff.py` or pass the same `--state-dir` to every command.
-- **An older overlapping skill** (for example a legacy `codex` skill) can capture
-  the trigger before Riff loads; see `README.md` for migration.
-- **A sandboxed Codex cannot commit from a linked worktree**; the driver commits.
-- **A backgrounded run can die with your session.** The calling harness may
-  terminate child processes when its session ends. Use `run --detach` plus `wait`: the detached run
-  survives, and `wait` picks it up. Never pipe riff output to `tail`; SIGPIPE can
-  kill it when the invoking shell exits.
+- **A timeout can leave a recoverable session.** Reply to the same participant with
+  a short request to finish. Failed turns do not spend a round. The default turn
+  timeout is 30 minutes; use the recovery command in `next_steps` to raise it.
+- **Usage-limit and auth failures do not heal on unchanged retries.** Report the
+  cause and the stated reset time when available, or select another peer within
+  the user's scope. Never present your own review as the missing peer's work.
+- **Denied tools leave silent gaps.** Check `denied_tools`. Inputs outside a Claude
+  peer's cwd need `params.add_dirs`; a settled turn can still lack that evidence.
+- **Codex as driver:** the default state directory may be outside its writable
+  roots. See `HARNESSES.md` for sandbox and state-directory setup.
+- **An older overlapping skill** can capture a trigger before Riff loads; see
+  `HARNESSES.md` for migration.
+- **A sandboxed Codex cannot commit from a linked worktree**; the driver handles
+  authorized integration.
+- **A backgrounded run can die with the driver session.** Use `run --detach` plus
+  `wait` for long work. Never pipe Riff output to `tail`; SIGPIPE can kill the run
+  when the invoking shell exits.

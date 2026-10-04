@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -415,31 +418,52 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn(earlier["run_id"], later["unverified_runs"])
         self.assertNotIn(later["run_id"], later["unverified_runs"])
 
-        def steps_for(mode: str, *, failing: bool = False, prediction: str | None = None) -> str:
-            adapter = FakeAdapter("fake", fail_ids={"peer-0"} if failing else set())
-            coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": adapter})
-            value = {
-                "version": 1, "mode": mode, "task": "Look at this.", "origin_harness": "codex",
-                "participants": [{"id": "peer-0", "harness": "fake", "cwd": str(self.cwd)}],
-                "driver_prediction": prediction,
-            }
-            result = coordinator.run(RunRequest.from_dict(value))
-            steps = " ".join(result["next_steps"])
-            # commands are pasteable against this store, not the default one
-            self.assertIn(f'--state-dir "{self.coordinator.store.root}" verify --run-id {result["run_id"]}', steps)
-            return steps
-
-        consult = steps_for("consult", prediction="The cache path is the weak point.")
-        self.assertIn("--view-changed", consult)
-        self.assertNotIn("--integrated", consult)
-        self.assertIn("The cache path is the weak point.", consult)
-
-        delegate = steps_for("delegate")
-        self.assertIn("--integrated", delegate)
-
-        failed = steps_for("consult", failing=True)
-        self.assertIn("--result not_performed", failed)
-        self.assertNotIn("--view-changed", failed)
+        cases = [
+            ("consult", False, {"passed", "not_performed"}),
+            ("discuss", False, {"passed", "not_performed"}),
+            ("delegate", False, {"passed"}),
+            ("consult", True, {"not_performed"}),
+        ]
+        for mode, failing, expected_outcomes in cases:
+            with self.subTest(mode=mode, failing=failing):
+                adapter = FakeAdapter("fake", fail_ids={"peer-0"} if failing else set())
+                coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": adapter})
+                request = RunRequest.from_dict({
+                    "mode": mode, "task": "Look at this.", "origin_harness": "codex",
+                    "participants": [{"id": "peer-0", "harness": "fake", "cwd": str(self.cwd)}],
+                    "driver_position": "none",
+                })
+                started = coordinator.run(request)
+                outcomes = set()
+                for step in started["next_steps"]:
+                    # Extract the suggested command, not its surrounding explanation.
+                    # Only fill user inputs; let the real CLI reject incomplete commands.
+                    match = re.search(r"python3 .*?(?:--note '[^']*'|--integrated)", step)
+                    if not match:
+                        continue
+                    command = match.group().replace("<acceptance command>", "exit 0")
+                    arguments = [
+                        re.sub(r"<[^>]+>", "test input", token)
+                        for token in shlex.split(command)
+                    ]
+                    completed = subprocess.run(
+                        [sys.executable, *arguments[1:]],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    record = coordinator.status(started["run_id"])["manifest"]["verification"]
+                    outcomes.add(record["result"])
+                    self.assertIsNone(record["view_changed"])
+                    self.assertEqual(record["integrated"], mode == "delegate")
+                    if record["result"] == "passed":
+                        expected_kind = "executed" if mode == "delegate" else "asserted"
+                        self.assertIn(expected_kind, [check["kind"] for check in record["checks"]])
+                    else:
+                        self.assertFalse(record["performed"])
+                        self.assertEqual(record["checks"], [])
+                    if mode != "delegate":
+                        self.assertEqual(record["note"], "test input")
+                self.assertEqual(outcomes, expected_outcomes)
 
     def test_timeout_next_step_resumes_the_same_session_with_a_longer_bound(self) -> None:
         class TimingOut(FakeAdapter):
@@ -455,6 +479,29 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn(f"reply --run-id {result['run_id']} --participant peer-0", steps)
         # a reply inherits the expired bound unless the step raises it
         self.assertIn("--timeout-seconds 1800", steps)
+
+    def test_documented_inspection_and_exploration_records_run_through_the_cli(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        examples = 0
+        for name in ("README.md", "SKILL.md", "references/PROTOCOLS.md"):
+            for block in re.findall(r"```bash\n(.*?)\n```", (root / name).read_text(), re.DOTALL):
+                if " verify --run-id " not in block or "--run " in block:
+                    continue
+                with self.subTest(document=name, block=block):
+                    examples += 1
+                    started = self.coordinator.run(self.request(participants=1))
+                    command = block.replace('"$RIFF_ROOT/scripts/riff.py"', '"' + str(root / "scripts/riff.py") + '"')
+                    command = command.replace("<uuid>", started["run_id"]).replace("<run-id>", started["run_id"])
+                    command = command.replace("<you>", "test-driver").replace("\\\n", "")
+                    completed = subprocess.run(
+                        [sys.executable, *shlex.split(command)[1:],
+                         "--state-dir", str(self.coordinator.store.root)],
+                        cwd=root, capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    record = self.coordinator.status(started["run_id"])["manifest"]["verification"]
+                    self.assertNotEqual(record["result"], "pending")
+        self.assertGreater(examples, 0, "No executable verification examples found")
 
     def test_checkout_fingerprint_is_recorded_at_dispatch_and_settle(self) -> None:
         git = ["git", "-C", str(self.cwd)]
