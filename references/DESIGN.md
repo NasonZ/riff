@@ -64,11 +64,11 @@ Riff's existing know-how is an asset, not migration debris. Preserve it through
 progressive disclosure:
 
 ```text
-field observation / research
+sanitized lesson / public research
             │
             ▼
          NOTES.md
- evidence, failed attempts, caveats
+ reusable rationale and caveats
             │
             ▼
         PLAYBOOK.md
@@ -84,12 +84,13 @@ entrypoint        mode-specific
  coordinator/adapters + focused tests
 ```
 
-Promote a lesson according to what it changes: record publication-safe rationale in `NOTES.md`,
-explain durable judgment in `PLAYBOOK.md`, and put always-needed guidance in
+Promote a lesson according to what it changes: record publication-safe rationale
+in `NOTES.md`, explain durable judgment in `PLAYBOOK.md`, and put guidance needed on every run in
 `SKILL.md`. Encode mechanical invariants in code and focused tests; evaluate
 judgment through fresh-agent behavior cases. Every lesson need not become an
 instruction in every layer. Keep volatile harness flags in `HARNESSES.md` and
-their executable contract in adapter tests.
+their executable contract in adapter tests. Keep private source evidence outside
+the repository; a reusable lesson does not require publishing its source record.
 
 ## Learning from runs
 
@@ -250,6 +251,24 @@ runs/<run-id>/
 └── logs/<turn-id>.log
 ```
 
+Treat the state directory as private data, including artifacts, raw process logs,
+verification output, and native sessions. Detached runs also retain the complete
+request under `detached/`. Metadata redaction checks secret-shaped keys; it does
+not sanitize arbitrary prose, paths, command output, or transcripts. Prompt hashes
+in manifests do not make the other stored material anonymous or safe to publish.
+
+Riff restricts its `runs/`, `detached/`, and `codex-home/` directories to their owner
+on POSIX systems, including when reopening existing directories. This does not
+isolate peers running as that same user. Keep state outside source checkouts and
+shared or automatically synced directories; use the operating system's access
+controls where POSIX modes are not sufficient. The Codex home contains a filtered
+copy of local configuration and links to authentication and cache data.
+
+The coordinator has no telemetry or automatic record-upload service. Peer
+harnesses use their configured providers and can transmit task context or use
+network tools within their granted capabilities. Sharing or exporting records
+requires explicit selection, review, and permission from the data owner.
+
 `run.json` stores coordination metadata, a task digest, references, contract fields,
 the driver's prediction, lint warnings, a git fingerprint of each participant's
 checkout at dispatch, status, and verification with its history. It does not
@@ -349,6 +368,21 @@ The contract rejects:
 
 Native sandbox and permission systems remain authoritative. The driver retains
 responsibility for reviewing changes and for every external side effect.
+
+Riff is a coordinator, not a hostile-agent containment boundary. Children inherit
+the launching environment and use the operator's harness configuration and
+credentials. A worktree separates edits but does not isolate a user's files,
+processes, credentials, or network. Prompt-enforced limits and disabled web-search
+tools do not establish an OS-level network boundary. For untrusted work, launch
+the harnesses inside an appropriately isolated environment with selected inputs,
+scoped credentials, and independently enforced network restrictions.
+
+Artifacts, source files, web pages, and tool output may carry prompt injections.
+The driver must assess their claims without promoting embedded instructions into
+authority. Logs and after-the-fact review can aid detection; they cannot prevent
+an action that already ran. Riff provides no synchronous security monitor, and
+same-user processes may modify its state or the tests used for verification.
+Artifact hashes and passing commands alone are not tamper-proof attestations.
 
 ## Testing strategy
 

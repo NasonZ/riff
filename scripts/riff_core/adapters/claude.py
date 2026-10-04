@@ -43,6 +43,11 @@ class ClaudeAdapter(HarnessAdapter):
         )
         require_string_param(self.name, params, "effort")
         require_string_param(self.name, params, "permission_mode")
+        if params.get("permission_mode") not in {None, "dontAsk", "acceptEdits"}:
+            raise ValidationError(
+                "claude permission_mode must be dontAsk or acceptEdits; "
+                "permission bypasses are not supported"
+            )
         for directory in _string_list_param(params, "add_dirs"):
             if not Path(directory).expanduser().is_dir():
                 raise ValidationError(f"claude param add_dirs entry does not exist: {directory}")

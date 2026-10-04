@@ -136,7 +136,7 @@ class AdapterProcessTests(unittest.TestCase):
             import json, sys
             args = sys.argv[1:]
             print(json.dumps({'type': 'result', 'is_error': True, 'api_error_status': 429,
-                              'result': "You've hit your session limit",
+                              'result': "You've hit your session limit · resets 2:50am",
                               'total_cost_usd': 0,
                               'session_id': args[args.index('--session-id') + 1]}))
             sys.exit(1)
@@ -175,6 +175,11 @@ class AdapterProcessTests(unittest.TestCase):
         }))
         env = {**os.environ, "RIFF_CLAUDE_BIN": fake}
         state = str(self.root / "state")
+        # Exercise upgrades from directories created with a permissive umask.
+        for name in ("runs", "detached"):
+            directory = Path(state) / name
+            directory.mkdir(parents=True, exist_ok=True)
+            directory.chmod(0o755)
 
         def riff(*args):
             done = subprocess.run([sys.executable, script, "--state-dir", state, *args],
@@ -182,11 +187,22 @@ class AdapterProcessTests(unittest.TestCase):
             self.assertEqual(done.returncode, 0, done.stderr)
             return json.loads(done.stdout)
 
+        invalid = subprocess.run(
+            [sys.executable, script, "--state-dir", state, "run", "--request", str(request),
+             "--run-id", "../escaped", "--detach"],
+            capture_output=True, text=True, env=env, timeout=10, check=False,
+        )
+        self.assertNotEqual(invalid.returncode, 0)
+        self.assertFalse((Path(state) / "escaped.request.json").exists())
+
         detached = riff("run", "--request", str(request), "--detach")
         self.assertEqual(detached["status"], "running")
         waited = riff("wait", "--run-id", detached["run_id"], "--timeout-seconds", "30")
         self.assertEqual(waited["status"], "settled")
         self.assertEqual(Path(waited["participants"][0]["artifact_file"]).read_text(), "detached artifact")
+        if os.name == "posix":
+            for name in ("runs", "detached"):
+                self.assertEqual((Path(state) / name).stat().st_mode & 0o077, 0)
 
     def test_codex_auth_failure_is_classified(self) -> None:
         fake = self.executable(

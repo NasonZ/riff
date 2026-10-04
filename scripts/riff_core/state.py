@@ -33,6 +33,12 @@ def default_state_root() -> Path:
     return (base / "riff").resolve()
 
 
+def private_directory(path: Path) -> None:
+    """Restrict a Riff-owned data directory, including existing installations."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.chmod(0o700)
+
+
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -90,7 +96,7 @@ class RunStore:
     def __init__(self, root: Path | None = None) -> None:
         self.root = (root or default_state_root()).expanduser().resolve()
         self.runs = self.root / "runs"
-        self.runs.mkdir(parents=True, exist_ok=True)
+        private_directory(self.runs)
 
     def run_dir(self, run_id: str) -> Path:
         try:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -104,6 +105,12 @@ class AdapterCommandTests(unittest.TestCase):
             ClaudeAdapter().build_command(
                 self.turn("claude", tools="write", params={"allowed_commands": ["rm *"]})
             )
+        with self.assertRaises(ValidationError):
+            ClaudeAdapter().build_command(
+                self.turn("claude", tools="write", params={
+                    "permission_mode": "bypassPermissions", "allowed_commands": ["pytest"],
+                })
+            )
 
     def test_claude_add_dirs_extends_readable_roots(self) -> None:
         shared = self.root / "shared"
@@ -144,17 +151,33 @@ class AdapterCommandTests(unittest.TestCase):
         )
         (real / "auth.json").write_text("{}")
         state = self.root / "state"
+        (state / "codex-home").mkdir(parents=True)
+        (state / "codex-home").chmod(0o755)
         with mock.patch.dict(
             os.environ, {"CODEX_HOME": str(real), "RIFF_STATE_DIR": str(state)}
         ):
             home = codex_module.codex_home(self.turn("codex"))
             config = (home / "config.toml").read_text()
-        self.assertNotIn("mcp_servers", config)
+        self.assertNotIn("mcp_servers", tomllib.loads(config))
         # everything that is not an MCP server survives, including later tables
         self.assertIn('model = "gpt-6-astra"', config)
         self.assertIn('trust_level = "trusted"', config)
         self.assertTrue((home / "auth.json").exists(), "auth must still resolve")
         self.assertEqual(home.parent, state.resolve(), "the home lives beside riff state")
+        if os.name == "posix":
+            self.assertEqual(home.stat().st_mode & 0o077, 0)
+
+        for source in (
+            'mcp_servers = { example = { command = "unused" } }\n',
+            '["mcp_servers"."example"]\ncommand = "unused"\n',
+        ):
+            with self.subTest(config=source), mock.patch.dict(
+                os.environ, {"CODEX_HOME": str(real), "RIFF_STATE_DIR": str(state)}
+            ):
+                (real / "config.toml").write_text(source)
+                with self.assertRaises(ValidationError):
+                    codex_module.codex_home(self.turn("codex"))
+                self.assertEqual((home / "config.toml").read_text(), config)
 
     def test_codex_pins_web_search_in_both_directions(self) -> None:
         # codex-cli 0.160.0 enables web search by default, so a scope that does

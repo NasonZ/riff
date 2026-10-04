@@ -3,3 +3,17 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 *.swp
+
+# Local requests, credentials, and runtime data are not source fixtures.
+.env
+.env.*
+!.env.example
+auth.json
+*.log
+*.request.json
+/request.json
+/runs/
+/detached/
+/codex-home/
+/.riff/
+/.riff-state/

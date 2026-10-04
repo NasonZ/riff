@@ -52,8 +52,8 @@ Check which harnesses are available:
 python3 scripts/riff.py capabilities
 ```
 
-Riff requires no third-party Python dependency; peers use their installed harnesses
-and configured providers. If you have older peer skills installed, follow the
+Riff requires Python 3.11+ with no third-party Python dependencies. Peers use their
+installed harnesses and configured providers. If you have older peer skills installed, follow the
 [migration notes](references/HARNESSES.md#migrate-overlapping-skills-safely) to
 avoid competing triggers.
 

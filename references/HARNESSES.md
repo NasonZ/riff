@@ -105,6 +105,7 @@ Relevant mappings:
 
 - model → `--model`;
 - effort → `--effort`;
+- permission mode → `dontAsk` or `acceptEdits`; bypass modes are rejected;
 - no tools → `--tools ''`;
 - read tools → an allowlist that excludes editing and shell mutation;
 - read+web tools → `--tools Read,Grep,Glob,WebSearch,WebFetch` plus
@@ -126,7 +127,7 @@ is not limited to the user's personal `WebFetch(domain:…)` list.
 Parse the JSON result for `session_id`, final result text, usage, model, subtype,
 `permission_denials`, `total_cost_usd` and `api_error_status`. Claude reports usage
 limits and credential failures inside that JSON even when it exits non-zero
-(`api_error_status: 429`, "You've hit your session limit"); the
+(`api_error_status: 429`, "You've hit your session limit · resets 2:50am"); the
 adapter classifies them as `rate_limit` and `auth` instead of a bare process error.
 Riff surfaces denials and cost in the run output. Do not use `--continue`; it
 depends on ambient recency.
@@ -168,6 +169,11 @@ Relevant mappings:
   under a temporary directory: Codex refuses to create helper binaries there.
   Inspect available tools when verifying MCP isolation;
 - non-repository directory → `--skip-git-repo-check` when explicitly allowed.
+
+After filtering, Riff parses the resulting TOML and refuses to launch if any MCP
+servers remain. Inline or quoted MCP table forms that the filter cannot remove
+need canonical `[mcp_servers.<name>]` tables or a separate MCP-free `CODEX_HOME`.
+An unsupported form must fail visibly rather than silently restore tools.
 
 Resume options differ from start options. In particular, a resumed session keeps
 its original working/sandbox context; do not mechanically replay every start flag.
@@ -254,8 +260,9 @@ Do not replace the user's normal Pi configuration merely to select a local model
 Provider/model discovery belongs to Pi.
 
 Pi's read-tool allowlist is not an operating-system path sandbox: it removes write
-and shell tools but can still read ambient files visible to the process. Use a
-restricted cwd/container when the readable filesystem itself is sensitive.
+and shell tools but can still read ambient files visible to the process. Changing
+cwd does not restrict that access. Use filesystem isolation, such as a container
+with only the required inputs mounted, when readable data needs a hard boundary.
 
 Respect inference-server capacity. A local llama.cpp server started with one slot
 should receive one active participant at a time; set coordination `concurrency: 1`
@@ -263,9 +270,9 @@ when several Pi participants target that endpoint. Several participant IDs do no
 create more server slots.
 
 If Pi reports that a model does not expose thinking controls, omit `thinking` and
-let the backing server own its reasoning policy. This is the normal shape for the
-current llama.cpp-hosted Qwen instance; passing a decorative effort value would not
-make the control real.
+let the backing server own its reasoning policy. This applies to a llama.cpp-hosted
+Qwen instance where Pi does not expose those controls; passing an effort value
+would not make the control real.
 
 ## Hermes
 

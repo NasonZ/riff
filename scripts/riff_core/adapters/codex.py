@@ -6,11 +6,12 @@ import json
 import os
 import re
 import shutil
+import tomllib
 from pathlib import Path
 from typing import Any
 
 from ..models import SettledTurn, TurnRequest, ValidationError
-from ..state import default_state_root
+from ..state import default_state_root, private_directory
 from .base import (
     HarnessAdapter,
     child_environment,
@@ -37,7 +38,17 @@ def _without_mcp_servers(config: str) -> str:
             inside = False
         if not inside:
             kept.append(line)
-    return "".join(kept)
+    filtered = "".join(kept)
+    try:
+        remaining = tomllib.loads(filtered)
+    except tomllib.TOMLDecodeError as error:
+        raise ValidationError("Codex configuration could not be safely filtered") from error
+    if remaining.get("mcp_servers"):
+        raise ValidationError(
+            "Codex MCP configuration uses a form Riff cannot safely remove; "
+            "use [mcp_servers.<name>] tables or a separate MCP-free CODEX_HOME"
+        )
+    return filtered
 
 
 def codex_home(turn: TurnRequest) -> Path:
@@ -55,7 +66,7 @@ def codex_home(turn: TurnRequest) -> Path:
     """
     real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     home = default_state_root() / "codex-home"
-    home.mkdir(parents=True, exist_ok=True)
+    private_directory(home)
     source = real / "config.toml"
     wanted = _without_mcp_servers(source.read_text()) if source.exists() else ""
     target = home / "config.toml"

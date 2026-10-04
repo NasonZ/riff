@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from riff_core import Coordinator, RunRequest, ValidationError
-from riff_core.state import RunStore
+from riff_core.state import RunStore, private_directory
 
 
 def _read_json(path: str) -> dict[str, Any]:
@@ -69,8 +69,9 @@ def command_run(args: argparse.Namespace) -> dict[str, Any]:
 
 def _detach(coordinator: Coordinator, request: RunRequest, run_id: str) -> dict[str, Any]:
     """Start the run in its own process group and return at once; follow it with wait."""
+    coordinator.store.run_dir(run_id)  # Validate before using the ID in any filename.
     folder = coordinator.store.root / "detached"
-    folder.mkdir(parents=True, exist_ok=True)
+    private_directory(folder)
     request_file = folder / f"{run_id}.request.json"
     request_file.write_text(json.dumps(request.to_dict()))
     command = [
