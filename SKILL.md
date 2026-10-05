@@ -7,9 +7,10 @@ description: Coordinate one or more independent AI harness peers for consultatio
 
 Bring another model into the work to contribute an independent assessment, develop
 an idea, challenge a framing, or complete a bounded task. Give it enough context to
-contribute and room to change your mind. The current interactive harness is the
-driver: it chooses participants, mediates follow-ups, and takes responsibility for
-what it adopts. Driver and peer are coordination roles, not capability ranks.
+contribute and room to change your mind. You are the driver: the agent the user is
+working with in this session. Your CLI or app is the harness. Choose participants,
+mediate follow-ups, and take responsibility for what you adopt. Driver and peer
+are coordination roles, not capability ranks.
 
 The bundled coordinator handles processes, exact native sessions, artifacts,
 timeouts, and records. Use it for operations an adapter supports. Those records
@@ -23,6 +24,11 @@ withheld; critique needs the proposal itself; early exploration needs room to
 extend possibilities before judging them. A useful result can be a better question
 or an unresolved distinction, as well as a decision or a patch.
 
+Engage with the peer's reasons: a distinction or connection may open a direction
+neither of you started with. Follow up to develop what it enables, examine an
+assumption, or find evidence that would distinguish the possibilities. Additional
+turns and agreement are not themselves progress.
+
 - **Consult** — an assessment or contribution, usually from one peer.
 - **Discuss** — follow-up rounds to develop ideas or resolve questions; default
   three settled turns per participant, with no obligation to use every round.
@@ -32,6 +38,11 @@ Peer turns can take many minutes. Use them when another perspective or a separat
 piece of work is worth that cost. Obey an explicit user roster. When asked only for
 “another model,” pick one complementary available peer and say which. Do not fan
 out simply because several harnesses are installed.
+
+Match the model to the work as well as the perspective. A clear, bounded task may
+suit a smaller or local model, leaving costly reasoning and driver context for
+uncertainty and review. Account for briefing, retries, and verification when
+judging the saving; see [delegation quality](references/PLAYBOOK.md#delegation-quality).
 
 ## Prepare the context
 
@@ -45,8 +56,9 @@ Set `driver_position` honestly:
 
 Use `driver_prediction` to record your starting expectation or uncertainty. It stays
 in the driver record and is never sent to the peer. For exploration, “No preferred
-structure yet; I want to understand the reader needs” is a useful baseline. Do not
-invent a prediction or a change of mind to complete a record.
+sync design yet; unclear which offline changes should coexist or need
+reconciliation” is a useful baseline. Do not invent a prediction or a change of
+mind to complete a record.
 
 Invite reframing and direct attention to the problem (“check for lost-update
 races”) rather than assigning a persona. Assess factual claims by their evidence
@@ -108,11 +120,12 @@ inspect a live run from another call.
 
 ## Continue or delegate
 
-For example, to develop a peer's idea about documentation structure:
+For example, a peer proposes merging offline edits to a shared field notebook.
+Follow up to explore whether the data could have a simpler shape:
 
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" reply --run-id <run-id> --participant <id> \
-  --prompt "Walk a newcomer through one task. Where would they need an explanation, and how could the page offer it?"
+  --prompt "Could observations coexist as separate records, with corrections referring to earlier entries? Work through two offline corrections to the same entry and what the researcher would see after sync."
 ```
 
 Follow the question that remains: develop a promising idea, examine a disagreement,

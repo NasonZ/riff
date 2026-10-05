@@ -7,6 +7,7 @@ or assessing a consequential result. Operational commands live in `SKILL.md` and
 
 ## Contents
 
+- [What the exchange is for](#what-the-exchange-is-for)
 - [Peer stance](#peer-stance)
 - [Choose the contribution](#choose-the-contribution)
 - [Develop an idea](#develop-an-idea)
@@ -19,11 +20,32 @@ or assessing a consequential result. Operational commands live in `SKILL.md` and
 - [Context and artifacts](#context-and-artifacts)
 - [How knowledge compounds](#how-knowledge-compounds)
 
+## What the exchange is for
+
+A framing determines what counts as the problem, which distinctions matter, and
+which solutions come to mind. A peer can contribute within that framing or change
+it. Its response may also supply an analogy, example, or partial idea that becomes
+useful only when the driver connects it to the work. Give those contributions room
+to develop before requiring a verdict.
+
+This joins exploration to disciplined inquiry: develop a possibility, work out
+what follows from it, and seek evidence where a claim needs settling. These are
+different kinds of progress. A new hypothesis is not a verified conclusion; an
+unresolved question can still make the next investigation much more useful.
+
+The working hypothesis is that a well-directed exchange can improve the search
+for ideas and the judgment applied to them. More models or more turns do not
+guarantee that improvement. Shared assumptions can survive discussion, and
+persuasion can produce agreement without better grounds. The
+[research notes](NOTES.md#research-and-limits) explain why the operating guidance
+protects independent contributions, permits reframing, and separates judgment
+from verification.
+
 ## Peer stance
 
-Treat every participant as an independent reasoner, not as a capability rank.
-`driver` and `worker` describe coordination positions. They do not imply that the
-driver is smarter, owns the truth, or should preserve its initial view.
+The driver coordinates the exchange; a peer contributes from its own session.
+A peer assigned a bounded task is also called a worker. These roles do not imply
+that the driver is smarter, owns the truth, or should preserve its initial view.
 
 A useful peer can:
 
@@ -70,19 +92,25 @@ promising parts, surface alternatives, or connect the idea to something useful.
 Premature ranking can close possibilities before they are understood; equally,
 exploration should not conceal a factual problem that undermines the premise.
 
-For example, “Review this rough documentation concept” leaves the contribution
-ambiguous. “Develop ways readers could enter this material; explain what each
-would help them understand” gives the peer a constructive task. If the peer
-distinguishes task-oriented and concept-oriented reading, explore how those needs
-interact: “Walk a newcomer through one task. Where would they need an explanation,
-and how could the page offer it?”
+The [README's synthetic field-notebook exchange](../README.md) starts with a
+proposal to merge offline edits. Claude asks whether observations and corrections
+could instead be separate records. Codex develops that design, then identifies a
+consequence: preserving two conflicting corrections does not settle which one to
+use. A further exchange establishes that reconciliation must name the corrections
+it considered, so a late arrival cannot be silently treated as resolved.
 
-The walkthrough might suggest explanations at decision points within a task,
-alongside a separate conceptual guide for readers seeking an overview. Ask the
-peer to sketch a difficult transition in each structure. That makes the tradeoff
-concrete enough to critique: does the inline explanation interrupt progress, or
-does the separate guide require too much switching? A distinction has become a
-design choice with a way to investigate it.
+The participants are changing the shape of the problem together. Follow such a
+possibility far enough to see what it enables and what remains difficult. Sketch
+the notebook before and after sync, or prototype the delayed-correction case.
+Neither proves the whole design. Deletion, device identity, and whether researchers
+can understand the history remain separate questions; bring them into the exchange
+when they affect the decision at hand.
+
+Other exchanges change the work to be done. A research discussion might turn a
+broad demand for a better score into two questions: which intervention is worth
+using, and which mechanism explains its effect? The first may need a comparison
+of complete workflows; the second may need an experiment holding other changes
+fixed. Work out which question matters before buying more runs.
 
 Carry forward useful questions, connections, and alternatives. When a choice is
 needed, name what would help make it. Stop when the user has enough to proceed,
@@ -115,9 +143,9 @@ use `none`; you can still collect separate first-round contributions.
 
 Record a private baseline in `driver_prediction` when it helps interpret the result.
 For a diagnosis, name what you expect and what would change it. For exploration,
-state your uncertainty: “No preferred structure yet; unclear whether task or
-concept should organize the material.” This field is never sent to peers. Leave it
-empty when there is nothing useful to record rather than manufacturing certainty.
+state your uncertainty: “No preferred sync design yet; unclear which offline
+changes should coexist or need reconciliation.” This field is never sent to peers.
+Leave it empty when there is nothing useful to record rather than manufacturing certainty.
 The record should distinguish starting without a view from changing an existing one.
 
 For several participants, isolate first-round prompts from one another. Optional
@@ -193,12 +221,13 @@ decisive evidence and checks, meaningful agreement or disagreement, and limitati
 such as denied access or failed participants. Choose prose or structure to suit
 the user's task.
 
-A short exploratory synthesis might be: “Codex suggested explanations within the
-task walkthrough after we questioned whether newcomers could choose between two
-entrances. I'd sketch that transition alongside the separate-guide option; we
-haven't tested either with readers.” This attributes the contribution, explains
-the next step, and leaves its status clear. Keep the run's outcome record even
-when the user-facing response is brief.
+A short exploratory synthesis might be: “I suggested separating observations from
+corrections; Codex developed that into a record-based sync design and identified
+what happens when a correction arrives after reconciliation. I'd prototype that
+case before committing to the design. We haven't checked the implementation or
+whether researchers understand the resulting history.”
+This attributes the contribution, explains the next step, and leaves its status
+clear. Keep the run's outcome record even when the user-facing response is brief.
 
 ## Delegation quality
 
@@ -215,6 +244,15 @@ A delegate begins without the driver's conversational context. Give it a contrac
 Narrow specifications outperform invitations to “improve the codebase.” A clean
 contract is also a diagnostic: if the driver cannot state the output and acceptance
 criteria, the work may need a consult before it is ready to delegate.
+
+Use that clarity to choose a model. A smaller or local model may execute a
+well-specified task cheaply and quickly while the driver handles ambiguity and
+reviews the result. Give the worker enough context to act without reconstructing
+the whole discussion, and request an artifact with supporting checks so its
+intermediate work need not fill the driver's context. Assess cost and elapsed time
+through acceptance, including the driver's briefing and review and any retries.
+If repeated corrections consume the saving, revise the contract or choose a more
+capable model within the user's constraints.
 
 A delegate can push back on the contract. Treat a justified reframe as signal, not
 insubordination. Reissue a corrected contract when necessary rather than forcing
@@ -255,6 +293,12 @@ follow-up. Do not restart from a compressed summary unless the native session is
 unrecoverable.
 
 ## Context and artifacts
+
+Track what the peer has seen, what it is assuming, and what it is trying to
+resolve. A disagreement may come from different evidence, meanings, or aims.
+Clarify that difference before treating it as a contest between conclusions.
+The peer does not inherit the driver's conversation; make the context it needs
+explicit without supplying an answer that was meant to be elicited independently.
 
 Protect the driver's context window:
 

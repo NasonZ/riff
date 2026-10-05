@@ -1,9 +1,9 @@
 # Riff design
 
-Riff is a shared Agent Skill plus a deterministic local coordinator for
-cross-harness collaboration. It preserves the original project's accumulated
-epistemic and delegation knowledge while generalizing the original Claude→Codex
-dyad into a driver-neutral, multi-participant system.
+Riff separates the judgment involved in collaboration from the mechanics of
+running it. A shared Agent Skill guides what to ask, how to follow up, and how to
+assess the result. A deterministic local coordinator manages peer sessions,
+artifacts, failures, and records across supported harnesses.
 
 ## Contents
 
@@ -178,8 +178,8 @@ visible in one place.
 
 ### Before and after
 
-The previous repository coupled one driver, one peer, one transport, and the
-collaboration guidance in a single skill:
+Riff began as a Claude→Codex dyad. The earlier design coupled one driver, one peer,
+one transport, and the collaboration guidance in a single skill:
 
 ```text
 Claude Code

@@ -81,16 +81,16 @@ For an exploration with no prior position:
 {
   "version": 1,
   "mode": "discuss",
-  "task": "Develop possible ways to organize documentation for newcomers. Explain what each helps readers understand and leave useful alternatives open.",
+  "task": "Explore offline sync designs for a field-notes app. Researchers record observations and correct entries before reconnecting. Develop how their contributions could be preserved and presented; leave useful alternatives and open questions.",
   "origin_harness": "codex",
   "participants": [
     {"id": "claude-ideas", "harness": "claude", "cwd": "/repo", "tools": "read"}
   ],
   "driver_position": "none",
-  "driver_prediction": "No preferred structure yet; unclear whether readers need tasks or concepts first.",
-  "context_refs": ["docs/audience.md"],
-  "acceptance_criteria": ["Connect proposals to the documented reader needs; label new assumptions"],
-  "out_of_scope": ["Editing the documentation"]
+  "driver_prediction": "No preferred sync design yet; unclear which offline changes should coexist or need reconciliation.",
+  "context_refs": ["docs/field-workflow.md"],
+  "acceptance_criteria": ["Connect proposals to the field workflow; label assumptions about sync and researcher needs"],
+  "out_of_scope": ["Implementing sync"]
 }
 ```
 
@@ -217,7 +217,7 @@ For exploration where no factual or acceptance checks were performed:
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
   --result not_performed \
-  --note "The peer proposed explanations within a task after we questioned separate entrances. Next: sketch a difficult transition in both structures. No prior preference, adoption, or reader testing."
+  --note "I suggested separating observations from corrections; the peer developed the sync design and identified a correction arriving after reconciliation. Next: prototype that case. No prior preference or adoption; implementation and researcher comprehension untested."
 ```
 
 This closes a pending record without claiming the ideas were verified. Omit
