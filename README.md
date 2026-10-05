@@ -1,30 +1,36 @@
 # Riff
 
-Two models can know much of the same material and still approach a problem
-differently. A distinction, analogy, or objection from one can give the other a
-new direction to explore. Riff is built around that exchange: bringing different
-semantic spaces into conversation, with room for either participant to change
-the framing.
+*There are places your thinking hasn’t been yet.*
+
+Another perspective can make a familiar problem newly workable. An analogy
+suggests a design; an objection exposes an assumption; a distinction reveals a
+question you hadn't thought to ask. Following those contributions can change
+where the work goes next.
+
+Riff brings that exchange into ongoing work with AI agents. Claude Code, Codex,
+Pi, and Hermes can consult, discuss, or delegate to one another through one shared
+Agent Skill. Bring in a peer to explore an idea, assemble a roundtable around a
+difficult question, or give a well-defined task to a smaller model.
 
 Inspired by Andrej Karpathy's [LLM Council](https://github.com/karpathy/llm-council),
-which combines independent responses, peer review, and synthesis, Riff brings
-collaboration into ongoing agent work. Claude Code, Codex, Pi, and Hermes can
-consult, discuss, or delegate to one another through one shared Agent Skill.
+which combines independent responses, peer review, and synthesis, Riff makes room
+for follow-up: a contribution can become the starting point for the next question.
 
 You stay in the conversation with the agent you're already using. Ask it to bring
 in a peer, and it gives that peer the context it needs in a separate session. It
 reads the response and follows up: perhaps to develop a promising idea, question
-an assumption, or work through a disagreement. Either participant can suggest a
-different direction.
+an assumption, or work through a disagreement.
 
-We call your coordinating agent the **driver**. Its job is to bring the exchange
-back to you with a considered view: what each participant contributed, what it
-recommends and why, and what still needs checking. If a peer delivers code, the
-driver reviews the changes and checks the result before integrating it. A clear
-task can also go to a smaller or local model, leaving expensive model calls and
-the driver's context available for the parts that need them.
+Your current agent is the **driver**: it coordinates the exchange and is
+responsible for the conclusions and changes it brings back to you. It explains
+what each participant contributed, what it recommends and why, and what still
+needs checking. Either participant can find the better framing. If a peer delivers
+code, the driver reviews the changes and checks the result before integrating it.
 
-Take an illustrative example: you're building a field-notes app with Claude Code.
+[Install Riff](#install-one-shared-copy) · [Ask for a peer](#ask-for-a-peer) ·
+[Match the model to the work](#match-the-model-to-the-work)
+
+For example, you're building a field-notes app with Claude Code.
 Its users need to record observations and correct entries while they're offline.
 When their devices reconnect, those changes need to come together without losing
 anyone's work. You ask Claude to explore the design with Codex. Here's how that
@@ -60,9 +66,10 @@ riff might unfold:
 > correction arriving after reconciliation. That will exercise the proposed
 > sync rules; we still need to see whether researchers understand the history.
 
-The useful move is from “merge edits” to “preserve observations and corrections.”
-That changes which solutions are worth considering. Following its consequences
-then reveals the delayed-correction case to investigate. The
+The app still needs to sync offline work, but the exchange changes what is being
+synced: observations and corrections, rather than merged text. That opens a simpler
+design and exposes a new obligation—keeping a late correction visibly unresolved.
+The next step is now a concrete case to prototype. The
 [playbook](references/PLAYBOOK.md#develop-an-idea) shows how to develop such an
 opening; the [design rationale](references/NOTES.md#inquiry-across-perspectives)
 connects it to inquiry, perspective-taking, and the limits of model agreement.
@@ -109,10 +116,12 @@ In a fresh session, ask naturally:
 - “Have Pi investigate the parser failure, then check its findings.”
 - “Delegate this fix to Codex in a worktree and review the result.”
 
-Riff defaults to one peer. You can name several, select models or providers, or
-ask for another instance of the same harness. **Consult** gets an assessment or
-contribution; **discuss** continues through bounded rounds; **delegate** assigns a
-task with an explicit scope and acceptance checks. The driver handles the request
+Riff defaults to one peer. For a roundtable, name several participants; your
+current agent carries questions and contributions between their sessions. You can
+select models or providers, or ask for another instance of the same harness.
+**Consult** gets an assessment or contribution; **discuss** continues through
+bounded rounds; **delegate** assigns a task with an explicit scope and acceptance
+checks. The driver handles the request
 format and coordinator commands.
 
 What you share changes the task. Withhold your diagnosis to ask for an independent

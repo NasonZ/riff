@@ -23,10 +23,12 @@ framings they can bring to a problem. It is an intuition for designing the
 interaction, not a claim that Riff measures their internal representations or
 that different model names imply independent knowledge or errors.
 
-The interesting possibility is that one contribution changes what the other
-participant can usefully consider next. An analogy can suggest a design; a
-counterexample can expose an assumption; developing either can produce a question
-neither initial answer contained. The driver must be open to that change as well.
+An encounter with another perspective can change what becomes noticeable in a
+familiar problem. A different representation may bring a relationship into view;
+an analogy may make a new approach imaginable. In Riff, the practical possibility
+is that one contribution changes what another participant can usefully consider
+next. Developing an analogy or counterexample can produce a question neither
+initial answer contained. The driver must be open to that change as well.
 Calling another model a peer means little if every follow-up steers it back to the
 driver's original framing.
 
@@ -54,8 +56,9 @@ that the participants resolved their disagreement.
 
 Driver and peer describe coordination roles. Either participant can identify the
 better framing, and either can be persuaded. The driver remains responsible for
-what it adopts. Neutral prompts with focused questions leave more room for useful
-reasoning than task-irrelevant personas.
+the conclusions and changes it brings back to the user. Neutral prompts with
+focused questions leave more room for useful reasoning than task-irrelevant
+personas.
 
 Withhold a proposed answer when seeking an independent assessment. Supply it when
 asking for critique of that proposal. Record uncertainty honestly when there is no

@@ -5,12 +5,15 @@ description: Coordinate one or more independent AI harness peers for consultatio
 
 # Riff collaboration
 
-Bring another model into the work to contribute an independent assessment, develop
-an idea, challenge a framing, or complete a bounded task. Give it enough context to
-contribute and room to change your mind. You are the driver: the agent the user is
-working with in this session. Your CLI or app is the harness. Choose participants,
-mediate follow-ups, and take responsibility for what you adopt. Driver and peer
-are coordination roles, not capability ranks.
+Bring model peers into the work to contribute an independent assessment, develop
+an idea, challenge a framing, or complete a bounded task. Give each enough context
+to contribute and room to change the direction of the work.
+
+You are the driver: the agent the user is working with in this session. Your CLI
+or app is the harness. Choose participants, mediate follow-ups, and take
+responsibility for the conclusions and changes you bring back to the user. Driver
+and peer are coordination roles, not capability ranks; either can find the better
+framing.
 
 The bundled coordinator handles processes, exact native sessions, artifacts,
 timeouts, and records. Use it for operations an adapter supports. Those records
@@ -161,10 +164,11 @@ a change to an existing view; omit it when not applicable and explain in the not
 Use `--integrated` only once you actually apply a change or adopt a decision.
 Re-verifying preserves the prior record. See `PROTOCOLS.md` for further examples.
 
-Respond at the level of detail the user needs. Attribute the peer's contribution,
-explain what it changed or opened up, preserve material disagreement, and distinguish
-checks from judgments and unknowns. Disclose denied access, failed participants,
-and other limitations that affect the result. Give your resulting judgment or the
+Lead with what the exchange makes possible for the user's work: a recommendation,
+a useful question, a design to try, or a checked result. Attribute the peer's
+contribution, explain what it changed or opened up, preserve material disagreement,
+and distinguish checks from judgments and unknowns. Disclose denied access, failed
+participants, and other limitations that affect the result. Give your resulting judgment or the
 next useful question; a short consult can need only a few sentences. Keep a useful
 outcome record even when the user-facing response is brief. Records are private
 operator data: do not copy runs, transcripts, identifiers, or personal context into

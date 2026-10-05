@@ -22,11 +22,11 @@ artifacts, failures, and records across supported harnesses.
 
 Riff supports useful collaboration now and preserves evidence for improving it over
 time. A peer may develop an idea, question the framing, assess a proposal, or deliver
-a bounded task. The driver owns the resulting judgment without being treated as
-the intellectual authority. Exploration can end with a better question rather than
-agreement or a decision.
+a bounded task. The driver is responsible for the resulting judgment and
+integration; any participant can contribute the better framing. Exploration can
+end with a better question rather than agreement or a decision.
 
-The skill owns judgment:
+The skill guides the driver’s choices:
 
 - when collaboration is worth its cost;
 - how to elicit independent views;
@@ -44,10 +44,10 @@ The coordinator owns fragile mechanics:
 - request linting and executed verification; and
 - automatic run and turn records, including the driver's next steps.
 
-That last item matters more than it looks. A driver can lose the skill's text to
-context compaction mid-session; the coordinator's output is the one instruction
-surface it reads on every call, so obligations that must survive (read the
-artifact, verify, report denied access) travel there. They are derived from the run
+Context compaction can remove the skill's text mid-session. The coordinator
+therefore returns the driver's next steps with the result: read the artifact,
+check the relevant claims, and report denied access. These obligations remain
+available at the point where the driver needs to act. They are derived from the run
 itself rather than generic: a delegation asks for acceptance checks and an
 integration record, a consult asks for the claims checked and how the driver's
 starting expectation or uncertainty developed (quoting the baseline back), a
@@ -60,8 +60,8 @@ become another model provider registry, tool runtime, sandbox, or agent framewor
 
 ## Knowledge architecture
 
-Riff's existing know-how is an asset, not migration debris. Preserve it through
-progressive disclosure:
+Each document serves a different stage of the work, from understanding a design
+choice to applying it in a run:
 
 ```text
 sanitized lesson / public research

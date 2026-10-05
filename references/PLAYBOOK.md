@@ -1,9 +1,9 @@
 # Riff collaboration playbook
 
-This file holds the durable judgment that makes Riff more than a process launcher.
-Use it when choosing the kind of contribution to ask for, handling disagreement,
-or assessing a consequential result. Operational commands live in `SKILL.md` and
-[the protocols](PROTOCOLS.md).
+Use this playbook to decide what another participant could contribute, how to
+develop that contribution, and when the exchange has done enough. It covers early
+exploration, disagreement, assessment, and delegation. Request shapes and commands
+live in `SKILL.md` and [the protocols](PROTOCOLS.md).
 
 ## Contents
 
@@ -22,11 +22,16 @@ or assessing a consequential result. Operational commands live in `SKILL.md` and
 
 ## What the exchange is for
 
-A framing determines what counts as the problem, which distinctions matter, and
-which solutions come to mind. A peer can contribute within that framing or change
-it. Its response may also supply an analogy, example, or partial idea that becomes
-useful only when the driver connects it to the work. Give those contributions room
-to develop before requiring a verdict.
+The way a problem is described shapes which solutions come to mind. “Merge these
+edits” invites a different design from “preserve these observations.” A peer can
+supply the distinction that makes such a change possible, or an analogy, example,
+or partial idea that becomes useful when connected to the work. Give those
+contributions room to develop before requiring a verdict.
+
+Ask what a contribution lets you notice, ask, or try next. A new representation
+might expose a simpler route; an objection might reveal a condition worth testing.
+The value can outlast the immediate choice: retain a useful distinction and why it
+mattered, even when the particular proposal is set aside.
 
 This joins exploration to disciplined inquiry: develop a possibility, work out
 what follows from it, and seek evidence where a claim needs settling. These are
@@ -214,10 +219,11 @@ Use a devil's-advocate pass only when a decision appears prematurely settled. As
 for the strongest concrete counterargument, not theatrical contrarianism. Stop if
 the pass produces no new evidence or unresolved concern.
 
-The driver owns the final synthesis. Explain who contributed what and what context
-they saw; how the exchange changed or developed your view; and what you would
-adopt, reject, or investigate next, with reasons. Support that judgment with the
-decisive evidence and checks, meaningful agreement or disagreement, and limitations
+The driver brings the exchange back to the user's task. Lead with the resulting
+judgment or next useful question. Explain who contributed what and what context
+they saw, how the exchange changed or developed your view, and what you recommend
+using, rejecting, or investigating next, with reasons. Support that judgment with
+the decisive evidence and checks, meaningful agreement or disagreement, and limitations
 such as denied access or failed participants. Choose prose or structure to suit
 the user's task.
 
