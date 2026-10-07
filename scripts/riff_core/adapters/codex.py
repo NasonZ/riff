@@ -56,10 +56,10 @@ def codex_home(turn: TurnRequest) -> Path:
 
     The scope names a peer's authority and MCP is in no scope, but Codex offers
     no per-run way to drop a configured server: `-c mcp_servers={}` merges and
-    is ignored, `-c mcp.enabled=false` is unrecognised, and
+    is ignored, `-c mcp.enabled=false` is unrecognized, and
     `-c mcp_servers.<id>.enabled=false` replaces the server's table and breaks
     config loading outright ("invalid transport"). `CODEX_HOME` is the supported
-    control, so riff keeps a sanitised copy of the user's config beside its own
+    control, so Riff keeps a sanitized copy of the user's config beside its own
     state and points the turn at it. Auth and the model cache are linked, so
     credentials and model resolution are unchanged; it must not live under a
     temporary directory, which Codex refuses.
@@ -196,15 +196,26 @@ class CodexAdapter(HarnessAdapter):
             )
         error: str | None = None
         error_type: str | None = None
-        reported_error = _find_error(events)
+        # Codex also emits top-level `error` events for transient failures it is
+        # about to retry ("Reconnecting... 2/5"); only turn.failed or a non-zero
+        # exit fails the turn. Those messages still explain a turn that never settles.
+        turn_failure = _last_event_message(events, {"turn.failed"})
+        error_events = [
+            message
+            for event in events
+            if event.get("type") == "error" and (message := _event_message(event))
+        ]
         settled = any(event.get("type") == "turn.completed" for event in events)
         if completed.returncode != 0:
-            error = reported_error or completed.stderr.strip() or (
-                f"codex exited with status {completed.returncode}"
+            error = (
+                turn_failure
+                or (error_events[-1] if error_events else None)
+                or completed.stderr.strip()
+                or f"codex exited with status {completed.returncode}"
             )
             error_type = classify_error_text(error) or "process"
-        elif reported_error:
-            error = reported_error
+        elif turn_failure:
+            error = turn_failure
             error_type = classify_error_text(error) or "model"
         elif parse_errors and not events:
             error = parse_errors[0]
@@ -214,7 +225,9 @@ class CodexAdapter(HarnessAdapter):
             error_type = "parse"
         elif not settled:
             error = "Codex did not emit turn.completed"
-            error_type = "transport"
+            if error_events:
+                error += f": {error_events[-1]}"
+            error_type = classify_error_text(error) or "transport"
         elif not artifact:
             error = "Codex produced no final artifact"
             error_type = "parse"
@@ -245,6 +258,7 @@ class CodexAdapter(HarnessAdapter):
                 "event_count": len(events),
                 "parse_errors": parse_errors,
                 "settlement": "turn.completed" if settled else None,
+                "error_events": error_events,
             },
         )
 
@@ -292,12 +306,19 @@ def _last_text(events: list[dict[str, Any]]) -> str:
     return candidates[-1] if candidates else ""
 
 
-def _find_error(events: list[dict[str, Any]]) -> str | None:
+def _last_event_message(events: list[dict[str, Any]], types: set[str]) -> str | None:
     for event in reversed(events):
-        if event.get("type") in {"error", "turn.failed"}:
-            value = event.get("error") or event.get("message")
-            return str(value) if value else "Codex reported an error"
+        if event.get("type") in types:
+            return _event_message(event) or "Codex reported an error"
     return None
+
+
+def _event_message(event: dict[str, Any]) -> str | None:
+    """Text of an error event; turn.failed nests it as {"error": {"message": ...}}."""
+    value = event.get("error") or event.get("message")
+    if isinstance(value, dict):
+        value = value.get("message") or json.dumps(value)
+    return str(value) if value else None
 
 
 def _last_usage(events: list[dict[str, Any]]) -> dict[str, Any]:

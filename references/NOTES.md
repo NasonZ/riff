@@ -140,7 +140,7 @@ every task, or that the current skill outperforms a strong single-agent baseline
   establishing a general advantage for discussion or open-ended exploration.
 - **More reasoning is not enough.**
   [*Debate or Vote?*](https://arxiv.org/abs/2508.17536) finds that majority voting
-  accounts for much of the gain in its evaluated debate settings. Its theoretical
+  accounts for most of the gain in its evaluated debate settings. Its theoretical
   result depends on a specified model of belief updates. The practical implication
   is to compare against simpler ways of spending the same budget, and investigate
   what the interaction actually adds.

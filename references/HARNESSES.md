@@ -57,9 +57,9 @@ reasoning, and tool controls in the validated participant request. A forward pro
 must use the exact variable names above; guessed aliases can silently select a real
 harness or the normal state directory instead of the intended fixture.
 
-The process tests use fake executables and isolate both Riff state and the Codex
-source configuration in temporary directories, so they do not depend on the
-user's installed harness configuration.
+The adapter tests point these variables at fake executables and isolate both Riff
+state and the Codex source configuration in temporary directories, so they do not
+depend on which harnesses are installed or how they are configured.
 
 For real Codex turns, use a persistent writable state directory rather than `/tmp`.
 The current Codex adapter resolves its sanitized home through `RIFF_STATE_DIR`
@@ -150,18 +150,24 @@ their own.
 Capture `thread_id` from the event stream and require it for replies. Do not use
 `--last` when Riff can run more than one session.
 
+Only `turn.failed` or a non-zero exit fails a turn. Codex also emits top-level
+`error` events for transient failures it retries (“Reconnecting... 2/5”); a turn
+that then completes has succeeded. Riff keeps those messages in
+`adapter_metadata.error_events` and uses the last one to explain a turn that never
+settles. `turn.failed` nests its text as `{"error": {"message": ...}}`.
+
 Relevant mappings:
 
 - model → `--model`;
 - reasoning effort → `-c 'model_reasoning_effort="<level>"'`;
 - no/read/read+web/write tools → sandbox mode, the top-level `web_search`
   setting and prompt authority. Web search is on by default in codex-cli
-  0.160.0 and `[features].web_search` is deprecated, so riff passes
+  0.160.0 and `[features].web_search` is deprecated, so Riff passes
   `-c web_search="live"` for `read+web` and `-c web_search="disabled"` for every
   other scope. Check the event stream when verifying whether a turn searched;
-- MCP servers are bounded by a sanitised `CODEX_HOME`, not by a flag. Three
+- MCP servers are bounded by a sanitized `CODEX_HOME`, not by a flag. Three
   per-run routes were tried and rejected: `-c mcp_servers={}` merges and is
-  ignored, `-c mcp.enabled=false` is unrecognised, and
+  ignored, `-c mcp.enabled=false` is unrecognized, and
   `-c mcp_servers.<id>.enabled=false` replaces the server's table and breaks
   config loading ("invalid transport"). Riff therefore writes the user's config
   minus every `[mcp_servers.*]` table into `<state>/codex-home`, links
@@ -236,7 +242,14 @@ pi --mode rpc --session-id <uuid> --session-dir <dir> ...
 
 Send a JSONL `prompt` command on stdin. Collect assistant `message_end` events, but
 do not declare completion until `agent_settled`; retries, follow-ups or compaction
-may still be active before then.
+may still be active before then. A `prompt` response with `success: false`, or with
+`data.disposition: "handled"`, starts no run, so the turn fails at once instead of
+waiting for a settlement that will not come. Pi stays alive for further commands
+after settling; the adapter closes stdin, Pi's orderly shutdown, before signaling.
+
+Read the RPC pipes unbuffered. The closing events can share one pipe write, and a
+buffered line reader can hold `agent_settled` where a readiness check never sees
+it.
 
 Stream every RPC stdout/stderr event into the turn log while the child runs. The
 coordinator's `progress` command summarizes `message_update` delta types and sizes
@@ -246,7 +259,7 @@ next complete assistant/tool boundary.
 
 Relevant mappings:
 
-- provider → `--provider`;
+- provider → `--provider`, which Pi accepts only together with `--model`;
 - model → `--model`;
 - thinking → `--thinking`;
 - no tools → `--no-tools`;
@@ -286,7 +299,11 @@ hermes chat --quiet --source riff --ignore-rules \
 ```
 
 The adapter extracts the emitted `session_id` from either output stream and removes
-that transport line from the final artifact. `todo` enforces no-tools natively.
+that transport line from the final artifact. The prompt travels as one `--query`
+argument, which Linux limits to 128 KiB, so Riff rejects a larger prompt before
+launch. Current Hermes source also accepts `--query-file -` on stdin; switching to
+it needs a minimum Hermes version, which Riff does not yet check. `todo` enforces
+no-tools natively.
 Hermes' current `file` toolset combines reads and writes, so Riff records read scope
 as prompt-enforced and disables write delegation rather than overstating authority.
 

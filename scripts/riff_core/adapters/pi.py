@@ -18,6 +18,7 @@ from .base import (
     PEER_SYSTEM_NOTE,
     HarnessAdapter,
     child_environment,
+    classify_error_text,
     executable,
     require_bool_param,
     require_string_param,
@@ -56,6 +57,10 @@ class PiAdapter(HarnessAdapter):
         if turn.participant.tools == "read+web":
             raise ValidationError(
                 "pi does not support the read+web tool scope; use read or write"
+            )
+        if turn.participant.provider and not turn.participant.model:
+            raise ValidationError(
+                "pi provider requires model; Pi refuses --provider without --model"
             )
 
     def build_command(self, turn: TurnRequest) -> tuple[list[str], dict[str, str], str]:
@@ -130,79 +135,97 @@ class PiAdapter(HarnessAdapter):
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
             start_new_session=True,
         )
         assert process.stdin is not None
         assert process.stdout is not None
         assert process.stderr is not None
         process.stdin.write(
-            json.dumps({"id": turn.turn_id, "type": "prompt", "message": turn.prompt})
-            + "\n"
+            (
+                json.dumps({"id": turn.turn_id, "type": "prompt", "message": turn.prompt})
+                + "\n"
+            ).encode("utf-8")
         )
         process.stdin.flush()
+        # Read the raw descriptors and split lines here. A buffered readline can pull
+        # several records from one pipe chunk; the selector then sees an empty pipe,
+        # and a final agent_settled waits in Python's buffer while Pi, which stays
+        # alive for further commands, never writes again.
         selector = selectors.DefaultSelector()
-        selector.register(process.stdout, selectors.EVENT_READ)
-        selector.register(process.stderr, selectors.EVENT_READ)
+        selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+        selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+        pending = {"stdout": b"", "stderr": b""}
         deadline = started + turn.timeout_seconds
         stderr_lines: list[str] = []
         log_path = Path(turn.log_path)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_stream = log_path.open("w", encoding="utf-8", buffering=1)
+
+        def read_records(stream_name: str, chunk: bytes) -> list[str]:
+            *lines, pending[stream_name] = (pending[stream_name] + chunk).split(b"\n")
+            return [line.decode("utf-8", errors="replace") for line in lines]
+
+        def log_stderr(line: str) -> None:
+            stderr_lines.append(line)
+            log_stream.write(f"[stderr] {line}\n")
+
         try:
-            while time.monotonic() < deadline:
+            while not settled and not error and time.monotonic() < deadline:
                 events = selector.select(timeout=0.25)
                 if not events:
                     if process.poll() is not None:
                         break
                     continue
                 for key, _ in events:
-                    stream = key.fileobj
-                    line = stream.readline()
-                    if not line:
-                        selector.unregister(stream)
+                    chunk = os.read(key.fd, 65536)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
                         continue
-                    if stream is process.stderr:
-                        stderr_line = line.rstrip("\n")
-                        stderr_lines.append(stderr_line)
-                        log_stream.write(f"[stderr] {stderr_line}\n")
-                        continue
-                    log_stream.write(line)
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if (
-                        event.get("type") == "response"
-                        and event.get("command") == "prompt"
-                        and not event.get("success")
-                    ):
-                        error = str(event.get("error") or "Pi rejected the prompt")
-                        error_type = "transport"
-                    if event.get("type") == "message_end":
-                        message = event.get("message") or {}
-                        if message.get("role") == "assistant":
-                            final_message = message
-                    if event.get("type") == "agent_settled":
-                        settled = True
-                        break
-                if settled:
-                    break
+                    for line in read_records(key.data, chunk):
+                        if key.data == "stderr":
+                            log_stderr(line)
+                            continue
+                        log_stream.write(line + "\n")
+                        if settled or error:
+                            continue
+                        try:
+                            event = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if event.get("type") == "response" and event.get("command") == "prompt":
+                            # No run follows a rejected or handled prompt, so
+                            # agent_settled will never arrive.
+                            if not event.get("success"):
+                                error = str(event.get("error") or "Pi rejected the prompt")
+                                error_type = "transport"
+                            elif (event.get("data") or {}).get("disposition") == "handled":
+                                error = "Pi handled the prompt without starting a run"
+                                error_type = "transport"
+                        if event.get("type") == "message_end":
+                            message = event.get("message") or {}
+                            if message.get("role") == "assistant":
+                                final_message = message
+                        if event.get("type") == "agent_settled":
+                            settled = True
         finally:
             selector.close()
+            # Closing stdin is Pi's orderly shutdown; it lets a settled session finish
+            # writing before any signal is sent.
+            process.stdin.close()
+            if settled:
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
             _terminate(process)
-            remaining_stdout = process.stdout.read()
+            remaining_stdout = pending["stdout"] + process.stdout.read()
             if remaining_stdout:
-                log_stream.write(remaining_stdout)
-            remaining_stderr = process.stderr.read()
-            if remaining_stderr:
-                for stderr_line in remaining_stderr.splitlines():
-                    stderr_lines.append(stderr_line)
-                    log_stream.write(f"[stderr] {stderr_line}\n")
-            for stream in (process.stdin, process.stdout, process.stderr):
-                if stream is not None:
-                    stream.close()
+                log_stream.write(remaining_stdout.decode("utf-8", errors="replace"))
+            remaining_stderr = pending["stderr"] + process.stderr.read()
+            for line in remaining_stderr.decode("utf-8", errors="replace").splitlines():
+                log_stderr(line)
+            process.stdout.close()
+            process.stderr.close()
             log_stream.close()
         elapsed_ms = round((time.monotonic() - started) * 1000)
         if not settled and not error:
@@ -211,7 +234,10 @@ class PiAdapter(HarnessAdapter):
                 error_type = "timeout"
             else:
                 error = f"Pi exited with status {process.returncode} before agent_settled"
-                error_type = "process"
+                last_stderr = next((line for line in reversed(stderr_lines) if line.strip()), "")
+                if last_stderr:
+                    error += f": {last_stderr.strip()}"
+                error_type = classify_error_text(last_stderr) or "process"
         message_error = final_message.get("errorMessage")
         if message_error and not error:
             error = str(message_error)
@@ -268,7 +294,7 @@ def _session_file(sessions_dir: Path, session_id: str) -> Path | None:
     return matches[-1] if matches else None
 
 
-def _terminate(process: subprocess.Popen[str]) -> None:
+def _terminate(process: subprocess.Popen[Any]) -> None:
     if process.poll() is not None:
         process.wait()
         return

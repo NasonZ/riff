@@ -285,7 +285,7 @@ fabricated successful check. Verification distinguishes two kinds of check. A
 duration, output hash, and output tail; with only executed checks the result is
 derived from exit codes, and a claimed `passed` that contradicts a failing command
 is rejected. A `--check` string is recorded as `asserted`: the driver's statement,
-honestly labelled, never presented as executed (`RIF-DELEGATE-002`).
+honestly labeled, never presented as executed (`RIF-DELEGATE-002`).
 
 `validate` and `run` also return lint warnings for valid requests that tend to
 waste or bias a run: a delegation without acceptance criteria or out-of-scope
@@ -351,8 +351,8 @@ outbound network. Riff therefore pins the top-level `web_search` setting in both
 directions.
 
 MCP is in no scope, for either harness, and both needed a fix. Claude takes
-`--strict-mcp-config`, which uses only servers named by `--mcp-config` — and riff
-names none. Codex has no per-run equivalent, so riff keeps a sanitised
+`--strict-mcp-config`, which uses only servers named by `--mcp-config` — and Riff
+names none. Codex has no per-run equivalent, so Riff keeps a sanitized
 `CODEX_HOME` beside its own state: a copy of the user's config with every
 `[mcp_servers.*]` table removed, with auth and the model cache linked so
 credentials and model resolution are unchanged. A settled Codex turn reports
@@ -406,7 +406,7 @@ Two datasets drive forward tests with fresh agents; neither runs in CI because e
 costs model calls. `tests/trigger_cases.json` holds should- and should-not-trigger
 prompts, weighted toward near-misses; rerun it after any description change.
 `tests/behavior_cases.json` holds scenarios drawn from field failures and explicit
-design aims, with their basis labelled and tied to observable expectations. Run
+design aims, with their basis labeled and tied to observable expectations. Run
 each with and without the change under test and judge the transcript and run
 manifest rather than the driver's summary. Keep private results outside the
 repository; publish only explicitly approved, sanitized findings. Passing

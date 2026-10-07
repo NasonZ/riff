@@ -10,6 +10,7 @@ import threading
 import unittest
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -505,15 +506,16 @@ class CoordinatorTests(unittest.TestCase):
             def _settle(self, turn: TurnRequest) -> SettledTurn:
                 settled = super()._settle(turn)
                 settled.status, settled.error_type = "failed", "timeout"
-                settled.error = "timed out after 8 seconds"
+                settled.error = "Pi turn did not settle within 7200 seconds"
                 return settled
 
         coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": TimingOut("fake")})
-        result = coordinator.run(self.request(participants=1))
+        result = coordinator.run(replace(self.request(participants=1), timeout_seconds=7200))
         steps = " ".join(result["next_steps"])
         self.assertIn(f"reply --run-id {result['run_id']} --participant peer-0", steps)
-        # a reply inherits the expired bound unless the step raises it
-        self.assertIn("--timeout-seconds 1800", steps)
+        # a reply inherits the expired bound unless the step raises it, whatever the
+        # harness's wording of the timeout
+        self.assertIn("--timeout-seconds 14400", steps)
 
     def test_documented_inspection_and_exploration_records_run_through_the_cli(self) -> None:
         root = Path(__file__).resolve().parent.parent

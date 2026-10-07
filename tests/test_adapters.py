@@ -20,6 +20,16 @@ class AdapterCommandTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.cwd = self.root / "repo"
         self.cwd.mkdir()
+        # Command construction must not depend on which harnesses are installed.
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                f"RIFF_{harness.upper()}_BIN": str(self.root / "bin" / harness)
+                for harness in ("claude", "codex", "pi", "hermes")
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -133,7 +143,7 @@ class AdapterCommandTests(unittest.TestCase):
                 }[harness]().build_command(self.turn(harness, tools="read+web"))
 
     def test_codex_turn_runs_against_a_home_without_mcp_servers(self) -> None:
-        # No per-run flag drops a configured server, so the sanitised CODEX_HOME
+        # No per-run flag drops a configured server, so the sanitized CODEX_HOME
         # is what makes the scope bound the peer's tools. Verified live: with it,
         # the peer answers ABSENT for an MCP tool it otherwise calls.
         from scripts.riff_core.adapters import codex as codex_module
@@ -227,6 +237,8 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertEqual(command[command.index("--tools") + 1], "read,grep,find,ls")
         self.assertEqual(command[command.index("--model") + 1], "qwen")
         self.assertEqual(command[command.index("--provider") + 1], "llama.cpp")
+        with self.assertRaisesRegex(ValidationError, "provider requires model"):
+            PiAdapter().build_command(self.turn("pi", provider="llama.cpp"))
 
     def test_hermes_maps_model_and_rejects_write_until_enforceable(self) -> None:
         command = HermesAdapter().build_command(

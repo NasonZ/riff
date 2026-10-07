@@ -393,6 +393,8 @@ WEB_CUE = re.compile(
     re.IGNORECASE,
 )
 FAN_OUT_LIMIT = 5
+
+
 def request_warnings(request: RunRequest) -> list[dict[str, str]]:
     """Return lint findings for a valid request that is likely to underperform."""
     warnings: list[dict[str, str]] = []

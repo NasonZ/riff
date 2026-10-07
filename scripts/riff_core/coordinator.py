@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import time
 import uuid
@@ -59,7 +58,7 @@ class Coordinator:
             # adapter-specific keys were listed; name the shared fields explicitly.
             "participant_fields": [spec_field.name for spec_field in fields(ParticipantSpec)],
             "note": (
-                "Every harness honours the participant fields model and provider; "
+                "Every harness honors the participant fields model and provider; "
                 "each harness's 'parameters' are the extra keys it accepts inside params."
             ),
             "harnesses": result,
@@ -318,6 +317,9 @@ class Coordinator:
         public = self._public_result(run_id, latest)
         public["status"] = manifest.get("status")
         public["warnings"] = manifest.get("warnings") or []
+        public["unverified_runs"] = self._unverified_runs(
+            manifest["origin_harness"], exclude=run_id
+        )
         return public
 
     def _settled_state(self, run_id: str) -> str:
@@ -879,6 +881,12 @@ class Coordinator:
                 self.script_invocation(),
                 mode=manifest.get("mode"),
                 prediction=(manifest.get("request") or {}).get("driver_prediction"),
+                timeouts={
+                    result.participant_id: self.store.read_participant(
+                        run_id, result.participant_id
+                    ).get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
+                    for result in results
+                },
             ),
         }
 
@@ -965,6 +973,7 @@ def _next_steps(
     *,
     mode: str | None,
     prediction: str | None,
+    timeouts: dict[str, int],
 ) -> list[str]:
     """Driver obligations carried in the tool output itself, because the skill text
     can fall out of a driver's context after compaction."""
@@ -977,9 +986,9 @@ def _next_steps(
     for result in results:
         if result.error_type == "timeout" and result.native_session_id:
             # A reply inherits the previous timeout; recovering under the same bound
-            # that just expired can repeat the same failure.
-            match = re.search(r"after (\d+) seconds", result.error or "")
-            previous = int(match.group(1)) if match else DEFAULT_TIMEOUT_SECONDS
+            # that just expired can repeat the same failure. Use the recorded bound:
+            # each harness words its timeout error differently.
+            previous = int(timeouts.get(result.participant_id, DEFAULT_TIMEOUT_SECONDS))
             longer = max(DEFAULT_TIMEOUT_SECONDS, 2 * previous)
             steps.append(
                 f"{result.participant_id} timed out but its session survives: {script} reply "

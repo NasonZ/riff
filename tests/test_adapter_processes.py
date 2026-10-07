@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import textwrap
@@ -210,8 +211,9 @@ class AdapterProcessTests(unittest.TestCase):
             """
             import json, sys
             print(json.dumps({'type': 'thread.started', 'thread_id': 'auth-thread'}))
-            print(json.dumps({'type': 'error', 'message':
-                'unexpected status 401 Unauthorized: Incorrect API key provided'}))
+            print(json.dumps({'type': 'error', 'message': 'Reconnecting... 1/5'}))
+            print(json.dumps({'type': 'turn.failed', 'error': {'message':
+                'unexpected status 401 Unauthorized: Incorrect API key provided'}}))
             sys.exit(1)
             """,
         )
@@ -219,7 +221,9 @@ class AdapterProcessTests(unittest.TestCase):
             result = CodexAdapter().start(self.turn("codex", suffix="codex-auth"))
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "auth")
-        self.assertIn("401", result.error)
+        self.assertEqual(
+            result.error, "unexpected status 401 Unauthorized: Incorrect API key provided"
+        )
 
     def test_codex_start_and_reply_parse_jsonl_and_artifact(self) -> None:
         fake = self.executable(
@@ -230,6 +234,8 @@ class AdapterProcessTests(unittest.TestCase):
             output = pathlib.Path(args[args.index('-o') + 1])
             output.write_text('codex artifact')
             print(json.dumps({'type': 'thread.started', 'thread_id': 'codex-session'}))
+            # A transient error Codex retried does not fail a completed turn.
+            print(json.dumps({'type': 'error', 'message': 'Reconnecting... 1/5 (stream closed)'}))
             print(json.dumps({'type': 'turn.completed', 'usage': {'output_tokens': 7}}))
             """,
         )
@@ -299,10 +305,14 @@ class AdapterProcessTests(unittest.TestCase):
                 session = pathlib.Path(args[args.index('--session') + 1])
                 session_id = session.stem.split('_')[-1]
             json.loads(sys.stdin.readline())
-            print(json.dumps({'type': 'message_end', 'message': {
+            # Like real Pi: the closing events can share one pipe write, and the
+            # process stays alive for further commands until stdin closes.
+            sys.stdout.write(json.dumps({'type': 'message_end', 'message': {
                 'role': 'assistant', 'content': [{'type': 'text', 'text': 'pi artifact'}],
-                'responseModel': 'fake-pi', 'usage': {'output': 4}}}), flush=True)
-            print(json.dumps({'type': 'agent_settled'}), flush=True)
+                'responseModel': 'fake-pi', 'usage': {'output': 4}}}) + '\\n'
+                + json.dumps({'type': 'agent_settled'}) + '\\n')
+            sys.stdout.flush()
+            sys.stdin.read()
             """,
         )
         adapter = PiAdapter()
@@ -344,6 +354,31 @@ class AdapterProcessTests(unittest.TestCase):
         with patch.dict(os.environ, {"RIFF_PI_BIN": fake}):
             result = PiAdapter().start(self.turn("pi", suffix="pi-noisy"))
         self.assertTrue(result.ok)
+
+    def test_pi_prompt_that_starts_no_run_fails_without_waiting_for_timeout(self) -> None:
+        # Pi stays alive after either response, and agent_settled never follows.
+        fake = self.executable(
+            "idle-pi",
+            """
+            import json, os, sys
+            json.loads(sys.stdin.readline())
+            response = json.loads(os.environ['FAKE_PI_RESPONSE'])
+            print(json.dumps({'type': 'response', 'command': 'prompt', **response}),
+                  flush=True)
+            sys.stdin.read()
+            """,
+        )
+        responses = {
+            "rejected": {"success": False, "error": "Model not found: fake/missing"},
+            "handled": {"success": True, "data": {"disposition": "handled"}},
+        }
+        for name, response in responses.items():
+            with self.subTest(name), patch.dict(
+                os.environ, {"RIFF_PI_BIN": fake, "FAKE_PI_RESPONSE": json.dumps(response)}
+            ):
+                result = PiAdapter().start(self.turn("pi", suffix=f"pi-{name}"))
+                self.assertEqual(result.error_type, "transport")
+                self.assertLess(result.elapsed_ms, 3000)  # the turn timeout is 5 s
 
     def test_hermes_start_and_reply_parse_stderr_session(self) -> None:
         fake = self.executable(

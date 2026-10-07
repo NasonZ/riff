@@ -54,11 +54,15 @@ class KnowledgeTests(unittest.TestCase):
         body = (ROOT / "SKILL.md").read_text().split("---", 2)[2]
         self.assertLess(len(body.splitlines()), 500)  # Anthropic skill-authoring guidance
 
-    def test_skill_links_resolve_and_stay_one_level_deep(self) -> None:
-        for link in LOCAL_LINK.findall((ROOT / "SKILL.md").read_text()):
-            target = ROOT / link
-            self.assertTrue(target.is_file(), f"SKILL.md links to missing {link}")
-            self.assertLessEqual(len(Path(link).parts), 2, f"{link} is nested too deeply")
+    def test_skill_links_every_reference_directly(self) -> None:
+        # Anthropic's guidance keeps references one level deep: an agent may only
+        # partly read a file reached through another reference.
+        links = LOCAL_LINK.findall((ROOT / "SKILL.md").read_text())
+        for link in links:
+            self.assertTrue((ROOT / link).is_file(), f"SKILL.md links to missing {link}")
+        linked = {(ROOT / link).resolve() for link in links}
+        for path in sorted((ROOT / "references").glob("*.md")):
+            self.assertIn(path.resolve(), linked, f"SKILL.md does not link {path.name}")
 
     def test_long_references_open_with_contents(self) -> None:
         for path in sorted((ROOT / "references").glob("*.md")):

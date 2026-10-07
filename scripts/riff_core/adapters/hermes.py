@@ -12,6 +12,7 @@ from ..models import SettledTurn, TurnRequest, ValidationError
 from .base import (
     PEER_SYSTEM_NOTE,
     HarnessAdapter,
+    classify_error_text,
     executable,
     require_positive_int_param,
     require_supported_params,
@@ -19,6 +20,9 @@ from .base import (
 )
 
 SESSION_PATTERN = re.compile(r"^\s*session_id:\s*(\S+)\s*$", re.MULTILINE)
+# The prompt travels as one --query argument, and Linux caps a single argument at
+# 128 KiB. Refuse clearly rather than fail at launch with "Argument list too long".
+QUERY_ARGUMENT_LIMIT = 128 * 1024
 
 
 class HermesAdapter(HarnessAdapter):
@@ -52,6 +56,12 @@ class HermesAdapter(HarnessAdapter):
             raise ValidationError(
                 "hermes does not support the read+web tool scope; use read or none"
             )
+        if len(_query(turn).encode("utf-8")) >= QUERY_ARGUMENT_LIMIT:
+            raise ValidationError(
+                "hermes receives the prompt as one command-line argument, limited to "
+                "128 KiB; reference large inputs through context_refs instead of "
+                "pasting them"
+            )
 
     def build_command(self, turn: TurnRequest) -> list[str]:
         self.validate(turn)
@@ -80,7 +90,7 @@ class HermesAdapter(HarnessAdapter):
         command.extend(
             ["--toolsets", "todo" if turn.participant.tools == "none" else "file"]
         )
-        command.extend(["--query", f"{PEER_SYSTEM_NOTE}\n\n{turn.prompt}"])
+        command.extend(["--query", _query(turn)])
         return command
 
     def start(self, turn: TurnRequest) -> SettledTurn:
@@ -114,7 +124,7 @@ class HermesAdapter(HarnessAdapter):
             error = completed.stderr.strip() or (
                 f"hermes exited with status {completed.returncode}"
             )
-            error_type = "process"
+            error_type = classify_error_text(error) or "process"
         elif not session_id:
             error = "Hermes did not emit an explicit session_id"
             error_type = "parse"
@@ -137,6 +147,10 @@ class HermesAdapter(HarnessAdapter):
                 "native-toolset" if turn.participant.tools == "none" else "prompt"
             ),
         )
+
+
+def _query(turn: TurnRequest) -> str:
+    return f"{PEER_SYSTEM_NOTE}\n\n{turn.prompt}"
 
 
 def _failed(
