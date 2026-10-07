@@ -783,6 +783,14 @@ class Coordinator:
             artifact_path.write_text("")
         if not log_path.exists():
             log_path.write_text(result.error or "")
+        state = self.store.read_participant(run_id, participant.id)
+        active = state.get("active_turn") or {}
+        # Coordinator observations, not provider-call timestamps. A blocked
+        # pipeline turn has no start; stale state must not donate another start.
+        started_at = (
+            active.get("started_at") if active.get("turn_id") == turn.turn_id else None
+        )
+        settled_at = utc_now()
         turn_record = {
             "schema_version": 1,
             "run_id": run_id,
@@ -790,6 +798,8 @@ class Coordinator:
             "participant_id": participant.id,
             "harness": participant.harness,
             "continued": turn.is_reply,
+            "started_at": started_at,
+            "settled_at": settled_at,
             "request": {
                 "prompt_digest": sha256_text(turn.prompt),
                 "cwd": participant.cwd,
@@ -801,7 +811,6 @@ class Coordinator:
             "recorded_at": utc_now(),
         }
         turn_file = self.store.write_turn(run_id, turn.turn_id, turn_record)
-        state = self.store.read_participant(run_id, participant.id)
         state["native_session_id"] = result.native_session_id
         state["native_session_ref"] = result.native_session_ref
         previous_turns = int(state.get("turn_count", 0))

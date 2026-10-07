@@ -142,13 +142,19 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(manifest["request"]["driver_prediction"], "Option B wins unless the cache is shared.")
 
     def test_reply_uses_the_exact_native_session(self) -> None:
-        started = self.coordinator.run(self.request(participants=1))
-        replied = self.coordinator.reply(
-            started["run_id"],
-            "peer-0",
-            "Compare with option B.",
-            timeout_seconds=1200,
-        )
+        with patch("scripts.riff_core.coordinator.utc_now", return_value="2026-01-01T00:00:00Z"):
+            started = self.coordinator.run(self.request(participants=1))
+        with patch("scripts.riff_core.coordinator.utc_now", return_value="2026-01-02T00:00:00Z"):
+            replied = self.coordinator.reply(
+                started["run_id"],
+                "peer-0",
+                "Compare with option B.",
+                timeout_seconds=1200,
+            )
+        state = self.coordinator.status(started["run_id"])["participant_state"]["peer-0"]
+        records = [read_json(Path(path)) for path in state["turns"]]
+        self.assertEqual([r["started_at"] for r in records], ["2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"])
+        self.assertEqual(records[1]["settled_at"], "2026-01-02T00:00:00Z")
         self.assertTrue(replied["ok"])
         self.assertTrue(self.fake.turns[-1].is_reply)
         self.assertEqual(self.fake.turns[-1].native_session_id, "session-peer-0")
@@ -217,6 +223,10 @@ class CoordinatorTests(unittest.TestCase):
         second = read_json(Path(states["peer-1"]["turns"][0]))
         self.assertEqual(first["execution"]["error_type"], "adapter")
         self.assertEqual(second["execution"]["error_type"], "dependency")
+        self.assertIsNotNone(first["started_at"])
+        self.assertIsNone(second["started_at"])
+        self.assertIsNotNone(first["settled_at"])
+        self.assertIsNotNone(second["settled_at"])
 
     def test_same_participant_replies_are_serialized_at_the_round_limit(self) -> None:
         started = self.coordinator.run(self.request(participants=1, max_rounds=2))
@@ -307,7 +317,8 @@ class CoordinatorTests(unittest.TestCase):
             progress = coordinator.progress(run_id)
             self.assertEqual(progress["status"], "running")
             self.assertEqual(progress["participants"]["peer-0"]["status"], "running")
-            self.assertIsNotNone(progress["participants"]["peer-0"]["active_turn"])
+            active = progress["participants"]["peer-0"]["active_turn"]
+            self.assertIsNotNone(active)
             with self.assertRaisesRegex(ValidationError, "requires a settled run"):
                 coordinator.verify(
                     run_id,
@@ -318,6 +329,30 @@ class CoordinatorTests(unittest.TestCase):
                 )
             release.set()
             future.result(timeout=2)
+        state = coordinator.status(run_id)["participant_state"]["peer-0"]
+        recorded = read_json(Path(state["turns"][0]))
+        self.assertEqual(recorded["started_at"], active["started_at"])
+        self.assertEqual(recorded["turn_id"], active["turn_id"])
+        self.assertIsNotNone(recorded["settled_at"])
+        self.assertNotIn("active_turn", state)
+
+    def test_stale_active_turn_does_not_supply_another_turns_start(self) -> None:
+        store = self.coordinator.store
+
+        class StaleAdapter(FakeAdapter):
+            def start(self, turn: TurnRequest) -> SettledTurn:
+                state = store.read_participant(turn.run_id, turn.participant.id)
+                state["active_turn"]["turn_id"] = "unrelated-turn"
+                state["active_turn"]["started_at"] = "2020-01-01T00:00:00Z"
+                store.write_participant(turn.run_id, turn.participant.id, state)
+                return super().start(turn)
+
+        coordinator = Coordinator(store=store, adapters={"fake": StaleAdapter("fake")})
+        result = coordinator.run(self.request(participants=1))
+        state = coordinator.status(result["run_id"])["participant_state"]["peer-0"]
+        recorded = read_json(Path(state["turns"][0]))
+        self.assertIsNone(recorded["started_at"])
+        self.assertIsNotNone(recorded["settled_at"])
 
     def test_recursive_child_is_rejected_at_the_depth_bound(self) -> None:
         with patch.dict(
