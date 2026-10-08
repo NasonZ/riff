@@ -68,6 +68,17 @@ class AdapterCommandTests(unittest.TestCase):
             native_session_id="native-session" if reply else None,
         )
 
+    def test_peers_do_not_inherit_the_driver_session(self) -> None:
+        with mock.patch.dict(
+            os.environ, {"CLAUDE_CODE_SESSION_ID": "driver", "PI_SESSION_FILE": "/driver.jsonl"}
+        ):
+            for harness, adapter in (("claude", ClaudeAdapter()), ("pi", PiAdapter())):
+                with self.subTest(harness):
+                    _, environment, _ = adapter.build_command(self.turn(harness))
+                    self.assertNotIn("CLAUDE_CODE_SESSION_ID", environment)
+                    self.assertNotIn("PI_SESSION_FILE", environment)
+                    self.assertEqual(environment["RIFF_PARTICIPANT_ID"], f"{harness}-a")
+
     def test_claude_maps_model_effort_and_read_tools(self) -> None:
         command, _, _ = ClaudeAdapter().build_command(
             self.turn(

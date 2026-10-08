@@ -35,8 +35,23 @@ def executable(name: str, env_name: str) -> str:
     return str(path)
 
 
+# Harnesses name their session in the environment of the commands they run. A
+# peer must not inherit the driver's: a Claude CLI started without --session-id
+# adopts CLAUDE_CODE_SESSION_ID and writes under the driver's session id.
+DRIVER_SESSION_VARIABLES = (
+    "CLAUDE_CODE_SESSION_ID",
+    "CODEX_THREAD_ID",
+    "CODEX_SESSION_ID",
+    "PI_SESSION_ID",
+    "PI_SESSION_FILE",
+    "HERMES_SESSION_ID",
+)
+
+
 def child_environment(turn: TurnRequest) -> dict[str, str]:
     environment = os.environ.copy()
+    for variable in DRIVER_SESSION_VARIABLES:
+        environment.pop(variable, None)
     environment["RIFF_RUN_ID"] = turn.run_id
     environment["RIFF_DEPTH"] = str(turn.depth + 1)
     environment["RIFF_PARTICIPANT_ID"] = turn.participant.id
