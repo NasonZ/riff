@@ -191,8 +191,10 @@ run is active. If a child dies before the event stream is captured:
 
 1. Check that the run is actually dead with `pgrep -af codex`, then inspect the
    candidate PID's cwd under `/proc/<pid>/cwd`.
-2. Search the dated `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` files using both
-   mtime and a distinctive prompt fragment. Do not choose ambient `--last`.
+2. Search the dated `sessions/YYYY/MM/DD/rollout-*.jsonl` files using both mtime and
+   a distinctive prompt fragment. Do not choose ambient `--last`. Riff's peers write
+   under its sanitized home, `<state>/codex-home/sessions`, not `~/.codex/sessions`;
+   a turn record's `native_transcript.path` names the file once the turn settles.
 3. Take the UUID from the confirmed rollout filename and resume it with a short
    situational note. Native resume retains the worker's working memory; a hand-made
    rebrief substitutes the driver's lossy summary.

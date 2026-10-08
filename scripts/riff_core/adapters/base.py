@@ -176,6 +176,15 @@ class HarnessAdapter(ABC):
     def reply(self, turn: TurnRequest) -> SettledTurn:
         raise NotImplementedError
 
+    def native_transcript(
+        self, session_id: str | None, session_ref: str | None
+    ) -> Path | None:
+        """The harness's own session file, when exactly one can be located.
+
+        Turn records use it to bound each episode within the native session, so an
+        importer can read the peer's side of a turn without guessing."""
+        return None
+
     def validate(self, turn: TurnRequest) -> None:
         if turn.participant.harness != self.name:
             raise ValidationError(

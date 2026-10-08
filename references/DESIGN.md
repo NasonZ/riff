@@ -121,6 +121,16 @@ Driver synthesis and user feedback require the linked driver conversation. The
 checkout fingerprint records HEAD and a dirty-file count, not an exact snapshot.
 Skill and harness versions are not comprehensively pinned in the run record.
 
+The records do identify where that material lives. Each harness names its session
+in the environment of commands it runs, so a run and each turn record the driver
+session that launched them. The driver's own transcript holds the launching tool
+call, whose result carries the run ID and each turn's artifact path. Each turn
+also records the byte range it appended to the peer's native session file, with a
+digest of that file at settle and its last entry ID. An importer can therefore
+nest each peer episode under the driver call that started it without matching
+on timestamps or prompt text. A resumed turn whose start was not observed records
+no start offset rather than claiming the whole file.
+
 A future versioned export layer should assemble selected runs with recoverable
 inputs, relevant artifacts and transcript excerpts, versions, outcome evidence,
 and explicit missing-data markers. Exported content needs deliberate selection and
@@ -274,7 +284,9 @@ the driver's prediction, lint warnings, a git fingerprint of each participant's
 checkout at dispatch, status, and verification with its history. It does not
 duplicate full prompts or artifacts. Turn records store a prompt digest, artifact
 path and hash, native session handle, timing, usage, cost where the harness reports
-it, permission denials, the checkout fingerprint at settle, and error. Comparing the
+it, permission denials, the checkout fingerprint at settle, and error, together
+with the driver session and the turn's position in the native session file
+described under [learning from runs](#learning-from-runs). Comparing the
 two fingerprints can reveal a changed HEAD or dirty-file count, but cannot
 establish that file contents stayed unchanged while the peer was reading them.
 

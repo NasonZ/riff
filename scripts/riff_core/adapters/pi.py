@@ -47,6 +47,11 @@ class PiAdapter(HarnessAdapter):
             "settlement": "agent_settled",
         }
 
+    def native_transcript(
+        self, session_id: str | None, session_ref: str | None
+    ) -> Path | None:
+        return Path(session_ref) if session_ref and Path(session_ref).is_file() else None
+
     def validate(self, turn: TurnRequest) -> None:
         super().validate(turn)
         require_supported_params(

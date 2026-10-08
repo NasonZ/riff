@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shlex
@@ -336,6 +338,45 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(recorded["turn_id"], active["turn_id"])
         self.assertIsNotNone(recorded["settled_at"])
         self.assertNotIn("active_turn", state)
+
+    def test_turn_records_bound_each_episode_in_the_native_session(self) -> None:
+        native = Path(self.temporary.name) / "native"
+        native.mkdir()
+
+        class NativeAdapter(FakeAdapter):
+            def native_transcript(self, session_id, session_ref):
+                path = native / f"{session_id}.jsonl"
+                return path if session_id and path.is_file() else None
+
+            def _settle(self, turn: TurnRequest) -> SettledTurn:
+                settled = super()._settle(turn)
+                with (native / f"{settled.native_session_id}.jsonl").open("a") as stream:
+                    stream.write(json.dumps({"id": f"entry-{len(self.turns)}"}) + "\n")
+                return settled
+
+        coordinator = Coordinator(
+            store=self.coordinator.store, adapters={"fake": NativeAdapter("fake")}
+        )
+        session_file = native / "session-peer-0.jsonl"
+        with patch.dict(os.environ, {"CODEX_THREAD_ID": "driver-thread"}):
+            run_id = coordinator.run(self.request(participants=1))["run_id"]
+            first_end = session_file.stat().st_size
+            coordinator.reply(run_id, "peer-0", "Continue.")
+            # A resumed episode whose start was never observed stays unbounded
+            # instead of claiming everything the file holds.
+            session_file.unlink()
+            coordinator.reply(run_id, "peer-0", "Once more.")
+        state = coordinator.status(run_id)["participant_state"]["peer-0"]
+        first, second, third = (read_json(Path(path))["native_transcript"] for path in state["turns"])
+        self.assertEqual((first["start_offset"], first["end_offset"]), (0, first_end))
+        self.assertEqual(second["start_offset"], first_end)
+        self.assertEqual(second["last_entry_id"], "entry-2")
+        self.assertIsNone(third["start_offset"])
+        self.assertEqual(third["sha256"], hashlib.sha256(session_file.read_bytes()).hexdigest())
+
+        driver = {"harness": "codex", "session_id": "driver-thread", "session_file": None}
+        self.assertEqual(coordinator.status(run_id)["manifest"]["driver_session"], driver)
+        self.assertEqual(read_json(Path(state["turns"][1]))["driver_session"], driver)
 
     def test_stale_active_turn_does_not_supply_another_turns_start(self) -> None:
         store = self.coordinator.store

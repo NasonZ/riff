@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -51,6 +52,10 @@ def _without_mcp_servers(config: str) -> str:
     return filtered
 
 
+def _codex_home_path() -> Path:
+    return default_state_root() / "codex-home"
+
+
 def codex_home(turn: TurnRequest) -> Path:
     """A Codex home whose config declares no MCP servers.
 
@@ -65,7 +70,7 @@ def codex_home(turn: TurnRequest) -> Path:
     temporary directory, which Codex refuses.
     """
     real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-    home = default_state_root() / "codex-home"
+    home = _codex_home_path()
     private_directory(home)
     source = real / "config.toml"
     wanted = _without_mcp_servers(source.read_text()) if source.exists() else ""
@@ -99,6 +104,16 @@ class CodexAdapter(HarnessAdapter):
             "tool_scopes": ["none", "read", "read+web", "write"],
             "parameters": ["reasoning_effort", "skip_git_repo_check"],
         }
+
+    def native_transcript(
+        self, session_id: str | None, session_ref: str | None
+    ) -> Path | None:
+        # Riff's sanitized CODEX_HOME holds peer rollouts, not the user's ~/.codex.
+        if not session_id:
+            return None
+        sessions = _codex_home_path() / "sessions"
+        matches = sorted(sessions.rglob(f"rollout-*-{glob.escape(session_id)}.jsonl"))
+        return matches[0] if len(matches) == 1 else None
 
     def validate(self, turn: TurnRequest) -> None:
         super().validate(turn)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import uuid
@@ -32,6 +33,17 @@ class ClaudeAdapter(HarnessAdapter):
             "tool_scopes": ["none", "read", "read+web", "write"],
             "parameters": ["effort", "permission_mode", "add_dirs", "allowed_commands"],
         }
+
+    def native_transcript(
+        self, session_id: str | None, session_ref: str | None
+    ) -> Path | None:
+        # Claude stores a session under a directory derived from its cwd; the session
+        # UUID is unique, so search for it rather than re-deriving that encoding.
+        if not session_id:
+            return None
+        root = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+        matches = sorted((root / "projects").glob(f"*/{glob.escape(session_id)}.jsonl"))
+        return matches[0] if len(matches) == 1 else None
 
     def validate(self, turn: TurnRequest) -> None:
         super().validate(turn)

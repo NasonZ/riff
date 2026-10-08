@@ -142,6 +142,31 @@ class AdapterCommandTests(unittest.TestCase):
                     "hermes": HermesAdapter,
                 }[harness]().build_command(self.turn(harness, tools="read+web"))
 
+    def test_adapters_locate_only_an_unambiguous_native_session_file(self) -> None:
+        session = "0f8e1d2c-3b4a-4c5d-8e6f-7a8b9c0d1e2f"
+        claude_home = self.root / "claude-config"
+        claude_file = claude_home / "projects" / "-repo" / f"{session}.jsonl"
+        state = self.root / "state"
+        rollout = state / "codex-home" / "sessions" / "2026" / "10" / "08"
+        rollout = rollout / f"rollout-2026-10-08T01-02-03-{session}.jsonl"
+        for path in (claude_file, rollout):
+            path.parent.mkdir(parents=True)
+            path.write_text("{}\n")
+        with mock.patch.dict(
+            os.environ, {"CLAUDE_CONFIG_DIR": str(claude_home), "RIFF_STATE_DIR": str(state)}
+        ):
+            self.assertEqual(ClaudeAdapter().native_transcript(session, None), claude_file)
+            self.assertEqual(
+                CodexAdapter().native_transcript(session, None).resolve(), rollout.resolve()
+            )
+            # The same session under two project directories is ambiguous, not a guess.
+            duplicate = claude_home / "projects" / "-other" / f"{session}.jsonl"
+            duplicate.parent.mkdir()
+            duplicate.write_text("{}\n")
+            self.assertIsNone(ClaudeAdapter().native_transcript(session, None))
+        self.assertEqual(PiAdapter().native_transcript(session, str(rollout)), rollout)
+        self.assertIsNone(HermesAdapter().native_transcript(session, None))
+
     def test_codex_turn_runs_against_a_home_without_mcp_servers(self) -> None:
         # No per-run flag drops a configured server, so the sanitized CODEX_HOME
         # is what makes the scope bound the peer's tools. Verified live: with it,

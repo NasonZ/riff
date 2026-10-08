@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -31,6 +32,14 @@ UNVERIFIED_LIMIT = 5
 VERIFY_OUTPUT_TAIL_CHARS = 2000  # enough to show a failing assertion without copying a whole log
 DEFAULT_WAIT_SECONDS = 540  # under the ~10 min per-call limit common to agent shells
 ATTEMPT_FACTOR = 2  # failed turns allowed per round before a participant is considered broken
+# Each harness names its own session in the environment of commands it runs, so a
+# run records which driver session launched it without the driver having to say.
+DRIVER_SESSION_ENV = {
+    "claude": ("CLAUDE_CODE_SESSION_ID", None),
+    "codex": ("CODEX_THREAD_ID", None),
+    "pi": ("PI_SESSION_ID", "PI_SESSION_FILE"),
+    "hermes": ("HERMES_SESSION_ID", None),
+}
 
 
 class Coordinator:
@@ -110,6 +119,7 @@ class Coordinator:
                 "acceptance_criteria": list(request.acceptance_criteria),
             },
             "participants": [participant.id for participant in request.participants],
+            "driver_session": _driver_session(request.origin_harness),
             "checkouts_at_dispatch": {
                 participant.id: _checkout_fingerprint(participant.cwd)
                 for participant in request.participants
@@ -663,6 +673,10 @@ class Coordinator:
     def _mark_turn_running(
         self, run_id: str, participant: ParticipantSpec, turn: TurnRequest
     ) -> None:
+        origin = self.store.read_manifest(run_id).get("origin_harness")
+        before = self._native_transcript(
+            participant, turn.native_session_id, turn.native_session_ref
+        )
         state = self.store.read_participant(run_id, participant.id)
         state["status"] = "running"
         state["active_turn"] = {
@@ -671,6 +685,8 @@ class Coordinator:
             "log_file": turn.log_path,
             "started_at": utc_now(),
             "coordinator_pid": os.getpid(),
+            "driver_session": _driver_session(origin),
+            "native_transcript_before": _file_position(before),
         }
         self.store.write_participant(run_id, participant.id, state)
         with self.store.run_lock(run_id):
@@ -789,9 +805,8 @@ class Coordinator:
         active = state.get("active_turn") or {}
         # Coordinator observations, not provider-call timestamps. A blocked
         # pipeline turn has no start; stale state must not donate another start.
-        started_at = (
-            active.get("started_at") if active.get("turn_id") == turn.turn_id else None
-        )
+        own = active if active.get("turn_id") == turn.turn_id else {}
+        started_at = own.get("started_at")
         settled_at = utc_now()
         turn_record = {
             "schema_version": 1,
@@ -802,6 +817,10 @@ class Coordinator:
             "continued": turn.is_reply,
             "started_at": started_at,
             "settled_at": settled_at,
+            "driver_session": own.get("driver_session"),
+            "native_transcript": self._native_episode(
+                participant, turn, result, own.get("native_transcript_before")
+            ),
             "request": {
                 "prompt_digest": sha256_text(turn.prompt),
                 "cwd": participant.cwd,
@@ -823,6 +842,60 @@ class Coordinator:
         state.pop("active_turn", None)
         state.setdefault("turns", []).append(str(turn_file))
         self.store.write_participant(run_id, participant.id, state)
+
+    def _native_transcript(
+        self, participant: ParticipantSpec, session_id: str | None, session_ref: str | None
+    ) -> Path | None:
+        try:
+            return self.adapters[participant.harness].native_transcript(session_id, session_ref)
+        except OSError:
+            return None
+
+    def _native_episode(
+        self,
+        participant: ParticipantSpec,
+        turn: TurnRequest,
+        result: SettledTurn,
+        before: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """Where this turn sits in the harness's own session file: the byte range
+        it appended, a digest of the file at settle, and its last entry's id."""
+        path = self._native_transcript(
+            participant, result.native_session_id, result.native_session_ref
+        )
+        if path is None:
+            return None
+        if before is not None and before["path"] == str(path):
+            start: int | None = before["size"]
+        else:
+            # A new session starts empty; a resumed one with no recorded start is
+            # unbounded, and must say so rather than claim the whole file.
+            start = None if turn.is_reply else 0
+        digest = hashlib.sha256()
+        last = b""
+        try:
+            with path.open("rb") as stream:
+                for line in stream:
+                    digest.update(line)
+                    if line.strip():
+                        last = line
+                size = stream.tell()
+        except OSError:
+            return None
+        if start is not None and start > size:
+            start = None  # the file was rewritten during the turn, not appended to
+        try:
+            entry = json.loads(last) if last else {}
+        except json.JSONDecodeError:
+            entry = {}
+        entry_id = (entry.get("id") or entry.get("uuid")) if isinstance(entry, dict) else None
+        return {
+            "path": str(path),
+            "start_offset": start,
+            "end_offset": size,
+            "sha256": digest.hexdigest(),
+            "last_entry_id": entry_id if isinstance(entry_id, str) else None,
+        }
 
     def _public_result(
         self, run_id: str, results: list[SettledTurn]
@@ -915,6 +988,25 @@ class Coordinator:
             ):
                 found.append((path.stat().st_mtime, path.parent.name))
         return [run_id for _, run_id in sorted(found, reverse=True)[:UNVERIFIED_LIMIT]]
+
+
+def _driver_session(harness: str | None) -> dict[str, Any] | None:
+    variable, file_variable = DRIVER_SESSION_ENV.get(harness or "", (None, None))
+    session_id = os.environ.get(variable) if variable else None
+    if not session_id:
+        return None
+    return {
+        "harness": harness,
+        "session_id": session_id,
+        "session_file": os.environ.get(file_variable) if file_variable else None,
+    }
+
+
+def _file_position(path: Path | None) -> dict[str, Any] | None:
+    try:
+        return {"path": str(path), "size": path.stat().st_size} if path else None
+    except OSError:
+        return None
 
 
 def _aggregate_result(results: list[SettledTurn]) -> str:
