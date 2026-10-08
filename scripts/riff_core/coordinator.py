@@ -687,6 +687,9 @@ class Coordinator:
             "coordinator_pid": os.getpid(),
             "driver_session": _driver_session(origin),
             "native_transcript_before": _file_position(before),
+            "native_position_before": self._native_position(
+                participant, turn.native_session_id, turn.native_session_ref
+            ),
         }
         self.store.write_participant(run_id, participant.id, state)
         with self.store.run_lock(run_id):
@@ -820,7 +823,8 @@ class Coordinator:
             "driver_session": own.get("driver_session"),
             "native_transcript": self._native_episode(
                 participant, turn, result, own.get("native_transcript_before")
-            ),
+            )
+            or self._native_rows(participant, turn, result, own.get("native_position_before")),
             "request": {
                 "prompt_digest": sha256_text(turn.prompt),
                 "cwd": participant.cwd,
@@ -850,6 +854,38 @@ class Coordinator:
             return self.adapters[participant.harness].native_transcript(session_id, session_ref)
         except OSError:
             return None
+
+    def _native_position(
+        self, participant: ParticipantSpec, session_id: str | None, session_ref: str | None
+    ) -> dict[str, Any] | None:
+        try:
+            return self.adapters[participant.harness].native_position(session_id, session_ref)
+        except OSError:
+            return None
+
+    def _native_rows(
+        self,
+        participant: ParticipantSpec,
+        turn: TurnRequest,
+        result: SettledTurn,
+        before: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """Where this turn sits in a database-backed session: the message ids it added."""
+        after = self._native_position(
+            participant, result.native_session_id, result.native_session_ref
+        )
+        if after is None:
+            return None
+        if before is not None and before.get("session_id") == after["session_id"]:
+            start: int | None = before["last_message_id"]
+        else:
+            start = None if turn.is_reply else 0
+        return {
+            "path": after["path"],
+            "session_id": after["session_id"],
+            "start_message_id": start,
+            "end_message_id": after["last_message_id"],
+        }
 
     def _native_episode(
         self,

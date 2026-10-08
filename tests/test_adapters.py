@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import tempfile
 import tomllib
 import unittest
@@ -166,6 +167,18 @@ class AdapterCommandTests(unittest.TestCase):
             self.assertIsNone(ClaudeAdapter().native_transcript(session, None))
         self.assertEqual(PiAdapter().native_transcript(session, str(rollout)), rollout)
         self.assertIsNone(HermesAdapter().native_transcript(session, None))
+
+        hermes_home = self.root / "hermes"
+        hermes_home.mkdir()
+        with sqlite3.connect(hermes_home / "state.db") as database:
+            database.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT)")
+            database.executemany(
+                "INSERT INTO messages (session_id) VALUES (?)", [("h1",), ("other",), ("h1",)]
+            )
+        with mock.patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
+            position = HermesAdapter().native_position("h1", None)
+            self.assertEqual((position["session_id"], position["last_message_id"]), ("h1", 3))
+            self.assertEqual(HermesAdapter().native_position("new", None)["last_message_id"], 0)
 
     def test_codex_turn_runs_against_a_home_without_mcp_servers(self) -> None:
         # No per-run flag drops a configured server, so the sanitized CODEX_HOME

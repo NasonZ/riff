@@ -185,6 +185,13 @@ class HarnessAdapter(ABC):
         importer can read the peer's side of a turn without guessing."""
         return None
 
+    def native_position(
+        self, session_id: str | None, session_ref: str | None
+    ) -> dict[str, Any] | None:
+        """For a harness that keeps sessions in a database rather than a file: the
+        database, the session, and the id of its latest stored message."""
+        return None
+
     def validate(self, turn: TurnRequest) -> None:
         if turn.participant.harness != self.name:
             raise ValidationError(

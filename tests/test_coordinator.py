@@ -378,6 +378,29 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(coordinator.status(run_id)["manifest"]["driver_session"], driver)
         self.assertEqual(read_json(Path(state["turns"][1]))["driver_session"], driver)
 
+    def test_database_backed_sessions_record_the_message_ids_each_turn_added(self) -> None:
+        stored = {"session-peer-0": 0}
+
+        class DatabaseAdapter(FakeAdapter):
+            def native_position(self, session_id, session_ref):
+                if session_id not in stored:
+                    return None
+                return {"path": "/db", "session_id": session_id, "last_message_id": stored[session_id]}
+
+            def _settle(self, turn: TurnRequest) -> SettledTurn:
+                stored["session-peer-0"] += 3  # this turn's rows
+                return super()._settle(turn)
+
+        coordinator = Coordinator(
+            store=self.coordinator.store, adapters={"fake": DatabaseAdapter("fake")}
+        )
+        run_id = coordinator.run(self.request(participants=1))["run_id"]
+        coordinator.reply(run_id, "peer-0", "Continue.")
+        state = coordinator.status(run_id)["participant_state"]["peer-0"]
+        first, second = (read_json(Path(path))["native_transcript"] for path in state["turns"])
+        self.assertEqual((first["start_message_id"], first["end_message_id"]), (0, 3))
+        self.assertEqual((second["start_message_id"], second["end_message_id"]), (3, 6))
+
     def test_stale_active_turn_does_not_supply_another_turns_start(self) -> None:
         store = self.coordinator.store
 

@@ -126,7 +126,8 @@ in the environment of commands it runs, so a run and each turn record the driver
 session that launched them. The driver's own transcript holds the launching tool
 call, whose result carries the run ID and each turn's artifact path. Each turn
 also records the byte range it appended to the peer's native session file, with a
-digest of that file at settle and its last entry ID. An importer can therefore
+digest of that file at settle and its last entry ID; for Hermes, which stores
+sessions in a database, it records the message IDs the turn added. An importer can therefore
 nest each peer episode under the driver call that started it without matching
 on timestamps or prompt text. A resumed turn whose start was not observed records
 no start offset rather than claiming the whole file.

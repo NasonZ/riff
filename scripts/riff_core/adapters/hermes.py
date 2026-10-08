@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,27 @@ class HermesAdapter(HarnessAdapter):
             "parameters": ["max_turns"],
             "authority_note": "read scope is prompt-enforced on the installed CLI",
         }
+
+    def native_position(
+        self, session_id: str | None, session_ref: str | None
+    ) -> dict[str, Any] | None:
+        # Hermes stores sessions as rows in state.db; ids only grow, so the latest
+        # id at a turn's start and settle bounds the rows that turn added.
+        if not session_id:
+            return None
+        home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
+        database = home / "state.db"
+        if not database.is_file():
+            return None
+        try:
+            uri = database.resolve().as_uri() + "?mode=ro"
+            with closing(sqlite3.connect(uri, uri=True, timeout=5)) as connection:
+                row = connection.execute(
+                    "SELECT MAX(id) FROM messages WHERE session_id = ?", (session_id,)
+                ).fetchone()
+        except sqlite3.Error:
+            return None
+        return {"path": str(database), "session_id": session_id, "last_message_id": row[0] or 0}
 
     def validate(self, turn: TurnRequest) -> None:
         super().validate(turn)
