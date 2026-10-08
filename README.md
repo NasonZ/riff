@@ -47,9 +47,8 @@ for that follow-up; Andrej Karpathy's [LLM Council](https://github.com/karpathy/
 which combines independent responses, peer review, and synthesis, inspired it.
 
 Your agent is the **driver**. It carries the exchange, checks consequential claims,
-and answers to you for what it brings back; either participant can find the
-better framing. A peer that writes code works in its own worktree, and the driver
-reviews the diff before integrating it.
+and answers to you for what it brings back. A peer that writes code works in its
+own worktree, and the driver reviews the diff before integrating it.
 
 [Install Riff](#install-one-shared-copy) · [Ask for a peer](#ask-for-a-peer) ·
 [Match the model to the work](#match-the-model-to-the-work)
@@ -151,12 +150,11 @@ cover controls and enforcement.
 ## Records stay local
 
 Each run records its participants and models, artifacts, failures, usage, the
-driver's starting expectation, and what the driver later checked or adopted.
-Commands the coordinator ran are labeled executed; inspections the driver reports
-are labeled asserted. The records stay in your local state directory, and Riff
-uploads nothing; the harnesses you choose still send peers the task and its
-context. They let you review when a peer changed the work, but they are an
-evidence index, not a training dataset. See
+driver's starting expectation, and what the driver later checked or adopted. The
+records stay in your local state directory, and Riff uploads nothing; the
+harnesses you choose still send peers the task and its context. They let you
+review when a peer changed the work, but they are an evidence index, not a
+training dataset. See
 [learning from runs](references/DESIGN.md#learning-from-runs).
 
 ## Use the coordinator directly
