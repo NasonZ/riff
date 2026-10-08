@@ -7,6 +7,8 @@ and Hermes can consult, discuss with, or delegate to one another through one
 shared Agent Skill, each peer in its own session. Your agent follows up on what
 comes back, then tells you what changed and what still needs checking.
 
+![A notebook sketch turns from circle to cone to triangle, unfolds to reveal a straight path, then folds back with the path intact.](https://github.com/user-attachments/assets/db57a859-c38a-41cb-807c-59d3787cfb7a)
+
 Suppose you're building a field-notes app with Claude Code. Researchers record
 observations and correct entries offline, and nothing may be lost when their
 devices reconnect. You ask Claude to work through the sync design with Codex:
