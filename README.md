@@ -1,40 +1,15 @@
 # Riff
 
-*There are places your thinking hasn’t been yet.*
+*There are places your thinking hasn't been yet.*
 
-Another perspective can make a familiar problem newly workable. An analogy
-suggests a design; an objection exposes an assumption; a distinction reveals a
-question you hadn't thought to ask. Following those contributions can change
-where the work goes next.
+Riff lets the agent you're working with bring in another. Claude Code, Codex, Pi,
+and Hermes can consult, discuss with, or delegate to one another through one
+shared Agent Skill, each peer in its own session. Your agent follows up on what
+comes back, then tells you what changed and what still needs checking.
 
-Riff brings that exchange into ongoing work with AI agents. Claude Code, Codex,
-Pi, and Hermes can consult, discuss, or delegate to one another through one shared
-Agent Skill. Bring in a peer to explore an idea, assemble a roundtable around a
-difficult question, or give a well-defined task to a smaller model.
-
-Inspired by Andrej Karpathy's [LLM Council](https://github.com/karpathy/llm-council),
-which combines independent responses, peer review, and synthesis, Riff makes room
-for follow-up: a contribution can become the starting point for the next question.
-
-You stay in the conversation with the agent you're already using. Ask it to bring
-in a peer, and it gives that peer the context it needs in a separate session. It
-reads the response and follows up: perhaps to develop a promising idea, question
-an assumption, or work through a disagreement.
-
-Your current agent is the **driver**: it coordinates the exchange and is
-responsible for the conclusions and changes it brings back to you. It explains
-what each participant contributed, what it recommends and why, and what still
-needs checking. Either participant can find the better framing. If a peer delivers
-code, the driver reviews the changes and checks the result before integrating it.
-
-[Install Riff](#install-one-shared-copy) · [Ask for a peer](#ask-for-a-peer) ·
-[Match the model to the work](#match-the-model-to-the-work)
-
-For example, you're building a field-notes app with Claude Code.
-Its users need to record observations and correct entries while they're offline.
-When their devices reconnect, those changes need to come together without losing
-anyone's work. You ask Claude to explore the design with Codex. Here's how that
-riff might unfold:
+Suppose you're building a field-notes app with Claude Code. Researchers record
+observations and correct entries offline, and nothing may be lost when their
+devices reconnect. You ask Claude to work through the sync design with Codex:
 
 > **You:** Work through the offline sync design with Codex before we implement it.
 > We mustn't silently lose anyone's observations.
@@ -66,13 +41,18 @@ riff might unfold:
 > correction arriving after reconciliation. That will exercise the proposed
 > sync rules; we still need to see whether researchers understand the history.
 
-The app still needs to sync offline work, but the exchange changes what is being
-synced: observations and corrections, rather than merged text. That opens a simpler
-design and exposes a new obligation—keeping a late correction visibly unresolved.
-The next step is now a concrete case to prototype. The
-[playbook](references/PLAYBOOK.md#develop-an-idea) shows how to develop such an
-opening; the [design rationale](references/NOTES.md#inquiry-across-perspectives)
-connects it to inquiry, perspective-taking, and the limits of model agreement.
+A single second opinion would have ended at the CRDT. The follow-up changed what
+was being synced, and that exposed the case worth prototyping first. Riff is built
+for that follow-up; Andrej Karpathy's [LLM Council](https://github.com/karpathy/llm-council),
+which combines independent responses, peer review, and synthesis, inspired it.
+
+Your agent is the **driver**. It carries the exchange, checks consequential claims,
+and answers to you for what it brings back; either participant can find the
+better framing. A peer that writes code works in its own worktree, and the driver
+reviews the diff before integrating it.
+
+[Install Riff](#install-one-shared-copy) · [Ask for a peer](#ask-for-a-peer) ·
+[Match the model to the work](#match-the-model-to-the-work)
 
 ## Install one shared copy
 
@@ -101,10 +81,10 @@ cd ~/src/riff
 python3 scripts/riff.py capabilities
 ```
 
-Riff requires Python 3.11+ with no third-party Python dependencies. Peers use their
-installed harnesses and configured providers. If you have older peer skills
-installed, follow the [migration notes](references/HARNESSES.md#migrate-overlapping-skills-safely) to
-avoid competing triggers.
+Riff needs Python 3.11+ and no third-party packages; peers use your installed
+harnesses and configured providers. If older peer skills are installed, follow
+the [migration notes](references/HARNESSES.md#migrate-overlapping-skills-safely)
+so they don't compete for the same requests.
 
 ## Ask for a peer
 
@@ -112,62 +92,40 @@ In a fresh session, ask naturally:
 
 - “Get Codex's independent take on why this test is flaky.”
 - “Discuss this early idea with Claude and help me see what it could become.”
-- “Discuss with Claude what we could learn from a prototype versus an experiment.”
 - “Have Pi investigate the parser failure, then check its findings.”
 - “Delegate this fix to Codex in a worktree and review the result.”
 
-Riff defaults to one peer. For a roundtable, name several participants; your
-current agent carries questions and contributions between their sessions. You can
-select models or providers, or ask for another instance of the same harness.
-**Consult** gets an assessment or contribution; **discuss** continues through
-bounded rounds; **delegate** assigns a task with an explicit scope and acceptance
-checks. The driver handles the request
-format and coordinator commands.
+One peer is the default. Name several for a roundtable, choose models or
+providers, or ask for a second instance of the same harness. **Consult** asks for
+an assessment, **discuss** continues over bounded rounds, and **delegate** hands
+over a scoped task with acceptance checks.
 
-What you share changes the task. Withhold your diagnosis to ask for an independent
-explanation; share your draft to ask for critique; supply the aims and constraints
-when you want to develop an idea without a preferred answer. These choices leave
-different openings for the peer, without deciding what it will conclude. See
-[choosing the contribution](references/PLAYBOOK.md#choose-the-contribution).
-
-More discussion does not by itself make an answer better. Models can share a blind
-spot or persuade one another into a mistake. Riff asks the driver to engage with
-the peer's reasons, pursue useful differences, and check consequential claims
-against evidence. An exploration may instead leave you with a better question or
-a possibility worth trying. [Research and limits](references/NOTES.md#research-and-limits)
-explains the basis for these choices and what remains unmeasured.
+What you share shapes the answer: withhold your diagnosis to get an independent
+one, share a draft to have it critiqued, or give only the aims and constraints to
+explore. More rounds don't make an answer right. Models share blind spots and can
+talk each other into mistakes, so the driver weighs reasons and checks evidence
+rather than counting agreement. See
+[choosing the contribution](references/PLAYBOOK.md#choose-the-contribution) and
+[research and limits](references/NOTES.md#research-and-limits).
 
 ## Match the model to the work
 
-Discussion can sharpen an idea into a plan another model can execute. A capable
-driver can work through the uncertain parts, then give a smaller model a bounded
-task with the relevant inputs, constraints, and acceptance checks. Clear
-instructions make more work suitable for delegation; they also make the result
-easier to assess.
-
-For example: “Work out the change with Claude, then have Pi use my local Qwen
+Once discussion has turned an idea into a bounded task, a smaller or local model
+may be enough: “Work out the change with Claude, then have Pi use my local Qwen
 model to implement it in a worktree. Review the diff and run the agreed checks.”
-Riff supports explicit model and provider choices, including local inference
-through Pi; the driver makes the routing decision.
+The peer's tool calls stay in its own session, leaving the driver's context for
+the wider task. Judge the saving over the whole task, including briefing, retries,
+and review. See [delegation quality](references/PLAYBOOK.md#delegation-quality)
+and [local inference](references/HARNESSES.md#local-inference-servers).
 
-This can reduce paid inference and, when the smaller model and hardware suit the
-task, finish the work faster. The peer's tool calls and intermediate work stay in
-its own session; the driver reads the result and inspects supporting material as
-needed, preserving space in its context for the wider task. Judge the savings
-over the completed task, including briefing, follow-ups, retries, and verification.
-See [delegation quality](references/PLAYBOOK.md#delegation-quality) for the contract
-and [local inference](references/HARNESSES.md#local-inference-servers) for setup.
+## How it works
 
-## Why a skill and a coordinator?
-
-The skill teaches the choices that make collaboration useful: when to withhold
-your answer, when to share a proposal, how to develop an idea without forcing
-agreement, and how to assess what comes back. The coordinator handles processes,
-exact native sessions, artifacts, timeouts, tool scopes, and records. Follow-ups
-return to the same peer session, and partial failures remain visible.
-
-Each agent runs through a **harness**: the CLI or app that gives it tools and
-manages its session. Riff connects these harnesses through a local coordinator.
+The skill carries the judgment: what to withhold or share, how to develop an idea
+without forcing agreement, and how to assess the result. A local coordinator
+handles the mechanics: processes, exact native sessions, artifacts, timeouts, tool
+scopes, and records. Follow-ups return to the same peer session, and failures stay
+visible. Each agent runs in a **harness**, the CLI or app that gives it tools and
+a session.
 
 ```text
 your agent (in Claude Code / Codex / Pi / Hermes)
@@ -187,41 +145,24 @@ your agent (in Claude Code / Codex / Pi / Hermes)
 | Pi | Persistent JSONL RPC | provider, model, thinking | none/read/write |
 | Hermes | Explicit quiet-CLI session | provider, model, max turns | none/read; read is prompt-enforced; write disabled |
 
-Use Pi for llama.cpp/vLLM-hosted models when tools and sessions are needed. See
-[harness notes](references/HARNESSES.md) for controls and enforcement details.
+Use Pi for llama.cpp/vLLM-hosted models. [Harness notes](references/HARNESSES.md)
+cover controls and enforcement.
 
-## Learn from the work
+## Records stay local
 
-When did a peer change the direction of the work? Which follow-ups developed an
-idea, and which merely prolonged agreement? Riff's run and turn records give you
-material to investigate these questions: participants and models, artifacts,
-failures, usage, the driver's starting expectation or uncertainty, and subsequent
-checks and decisions.
-
-Their value depends on distinguishing a completed turn from a correct answer, an
-executed check from an asserted inspection, and an adopted idea from a verified
-claim. The skill asks the driver to record only what it checked and what the peer
-contributed. Riff labels reported inspections as asserted and commands it ran as
-executed. A rejected suggestion can be worth revisiting for the reasoning that
-ruled it out.
-
-Records stay in your configured local storage for your own use. Riff does not
-upload them to this repository or a shared dataset. Your selected harnesses and
-providers still process the task and context you send to peers. Sharing the
-records requires your explicit permission.
-
-They can inform private field reviews and, with curation, skill optimization or
-model post-training. The current records are an evidence index, not a self-contained
-training dataset: reconstructing an exchange also needs its artifacts and available
-native/driver transcripts. Riff does not
-automatically optimize skills or train models. See
-[the learning-loop design](references/DESIGN.md#learning-from-runs) for the current
-boundary, evaluation on separate tasks, and proposed next steps.
+Each run records its participants and models, artifacts, failures, usage, the
+driver's starting expectation, and what the driver later checked or adopted.
+Commands the coordinator ran are labeled executed; inspections the driver reports
+are labeled asserted. The records stay in your local state directory, and Riff
+uploads nothing; the harnesses you choose still send peers the task and its
+context. They let you review when a peer changed the work, but they are an
+evidence index, not a training dataset. See
+[learning from runs](references/DESIGN.md#learning-from-runs).
 
 ## Use the coordinator directly
 
-Most users can let the driver handle this. For a direct consult, save a request as
-`request.json`, replacing the working directory and context path with your own:
+The driver normally writes requests for you. For a direct consult, save this as
+`request.json` with your own paths:
 
 ```json
 {
@@ -246,8 +187,8 @@ python3 scripts/riff.py validate --request request.json
 python3 scripts/riff.py run --request request.json
 ```
 
-Read the returned artifact files, then follow the result's `next_steps`. For a
-consult where you inspected the cited code, a record might be:
+Read the artifact files it returns, then follow its `next_steps`. After checking
+the cited code, record what you did:
 
 ```bash
 python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
@@ -255,16 +196,10 @@ python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
   --view-changed yes --note "The ordering concern holds; implementation is pending."
 ```
 
-Only record that inspection after doing it. `--check` is an asserted inspection;
-`--run` executes a check and records its exit code. Use `--result not_performed`
-when nothing was checked, and `--integrated` only after applying a change or
-adopting a decision. [Protocols](references/PROTOCOLS.md#record-the-outcome) cover
-exploration, partial verification, and delegation.
-
-`run` prints its ID on stderr before blocking. For long runs or a driver with a
-per-call time limit, use `run --detach`, then bounded `wait --run-id <uuid>` calls.
-Use `progress --run-id <uuid>` for live Pi metadata; `--previews` opts into content.
-Continue with `reply --run-id <uuid> --participant <id> --prompt "..."`.
+`--check` records an inspection as asserted; `--run` executes a command and
+records its exit code. Use `--result not_performed` when nothing was checked.
+For long runs, use `run --detach` and then bounded `wait --run-id <uuid>` calls;
+continue with `reply`. [Protocols](references/PROTOCOLS.md) cover the rest.
 
 ## Development
 
@@ -272,13 +207,10 @@ Continue with `reply --run-id <uuid> --participant <id> --prompt "..."`.
 python3 -m unittest discover -s tests -v
 ```
 
-Tests cover request contracts, coordinator behavior, and fake harness processes.
-Fresh-agent behavior checks are separate: passing a process test does not establish
-that a model follows the skill well. See [testing strategy](references/DESIGN.md#testing-strategy)
-and [isolated test seams](references/HARNESSES.md#diagnostics-and-test-seams).
-
-Start with [the playbook](references/PLAYBOOK.md) for collaboration choices,
-[protocols](references/PROTOCOLS.md) for operational detail, and
-[design lessons](references/NOTES.md) for the rationale behind decisions.
+Tests cover request contracts, coordinator behavior, and fake harness processes;
+they don't show that a model follows the skill well, which needs fresh-agent
+checks. See [testing strategy](references/DESIGN.md#testing-strategy).
+[The playbook](references/PLAYBOOK.md) explains the collaboration choices and
+[design lessons](references/NOTES.md) the reasoning behind them.
 
 Riff uses the MIT License.
