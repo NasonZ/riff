@@ -239,13 +239,13 @@ clear. Keep the run's outcome record even when the user-facing response is brief
 
 A delegate begins without the driver's conversational context. Give it a contract:
 
-1. **Goal** — one observable outcome.
-2. **Context** — only the necessary paths, constraints, and prior decisions.
-3. **Inputs** — concrete files, URLs, commands, or artifacts.
-4. **Output contract** — the expected artifact and its shape.
-5. **Authority** — allowed tools, writable roots, and external side effects.
-6. **Out of scope** — tempting adjacent work it must not perform.
-7. **Acceptance criteria** — checks the driver will actually run.
+1. **Goal**: one observable outcome.
+2. **Context**: only the necessary paths, constraints, and prior decisions.
+3. **Inputs**: concrete files, URLs, commands, or artifacts.
+4. **Output contract**: the expected artifact and its shape.
+5. **Authority**: allowed tools, writable roots, and external side effects.
+6. **Out of scope**: tempting adjacent work it must not perform.
+7. **Acceptance criteria**: checks the driver will actually run.
 
 Narrow specifications outperform invitations to “improve the codebase.” A clean
 contract is also a diagnostic: if the driver cannot state the output and acceptance

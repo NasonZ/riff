@@ -152,19 +152,19 @@ source records are not distributed; `NOTES.md` preserves reusable lessons.
 They do not rank instruction authority. In particular, user authority boundaries
 remain binding regardless of the label on a rule.
 
-- `RIF-EPISTEMIC-001` [F] — elicit independently before comparison.
-- `RIF-EPISTEMIC-002` [R] — confidence is not evidence.
-- `RIF-EPISTEMIC-003` [T] — record the starting expectation or uncertainty when useful.
-- `RIF-SESSION-001` [F] — identify sessions explicitly.
-- `RIF-DELEGATE-001` [F] — verify before integration.
-- `RIF-DELEGATE-002` [R] — distinguish recorded execution from reported inspection;
+- `RIF-EPISTEMIC-001` [F]: elicit independently before comparison.
+- `RIF-EPISTEMIC-002` [R]: confidence is not evidence.
+- `RIF-EPISTEMIC-003` [T]: record the starting expectation or uncertainty when useful.
+- `RIF-SESSION-001` [F]: identify sessions explicitly.
+- `RIF-DELEGATE-001` [F]: verify before integration.
+- `RIF-DELEGATE-002` [R]: distinguish recorded execution from reported inspection;
   assess each check's relevance and scope.
-- `RIF-AUTHORITY-001` [T] — do not expand authority implicitly.
-- `RIF-AUTHORITY-002` [F] — match tool scope to the acceptance criteria.
-- `RIF-AUTHORITY-003` [F] — bound every tool the scope does not name.
-- `RIF-CONTEXT-001` [T] — prefer references and artifacts to transcript transfer.
-- `RIF-FAILURE-001` [F] — classify a peer failure before retrying it.
-- `RIF-COLLECTION-001` [F] — one installed skill owns each trigger.
+- `RIF-AUTHORITY-001` [T]: do not expand authority implicitly.
+- `RIF-AUTHORITY-002` [F]: match tool scope to the acceptance criteria.
+- `RIF-AUTHORITY-003` [F]: bound every tool the scope does not name.
+- `RIF-CONTEXT-001` [T]: prefer references and artifacts to transcript transfer.
+- `RIF-FAILURE-001` [F]: classify a peer failure before retrying it.
+- `RIF-COLLECTION-001` [F]: one installed skill owns each trigger.
 
 `tests/test_knowledge.py` checks references against this registry. Keep the source,
 scope, and caveats when updating a rule; field evidence on one model or task does
@@ -325,9 +325,9 @@ spend a participant's `max_rounds`; a failed turn being recovered does not, and
 attempts are capped at twice the budget so a broken peer cannot loop.
 
 For Pi, `progress` can inspect the RPC stream log and native JSONL while a turn is
-active. Its default view exposes operational metadata—event/update counts, block
-types, character counts, and tool names—without copying thinking or answer text
-into coordinator output. The RPC log supplies low-latency deltas; the session JSONL
+active. Its default view exposes operational metadata (event and update counts,
+block types, character counts, and tool names) without copying thinking or answer
+text into coordinator output. The RPC log supplies low-latency deltas; the session JSONL
 supplies durable continuation records and may lag until an assistant/tool boundary.
 Short content previews require an explicit flag. `run` prints its run ID on stderr
 before it blocks, so the run is addressable from a second shell at once; a
@@ -364,7 +364,7 @@ outbound network. Riff therefore pins the top-level `web_search` setting in both
 directions.
 
 MCP is in no scope, for either harness, and both needed a fix. Claude takes
-`--strict-mcp-config`, which uses only servers named by `--mcp-config` — and Riff
+`--strict-mcp-config`, which uses only servers named by `--mcp-config`, and Riff
 names none. Codex has no per-run equivalent, so Riff keeps a sanitized
 `CODEX_HOME` beside its own state: a copy of the user's config with every
 `[mcp_servers.*]` table removed, with auth and the model cache linked so

@@ -58,7 +58,8 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
 def read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text())
     if not isinstance(value, dict):
-        raise ValueError(f"expected JSON object in {path}")  # noqa: TRY004 — well-formed JSON of the wrong shape is a bad value
+        # Well-formed JSON of the wrong shape is a bad value.
+        raise ValueError(f"expected JSON object in {path}")  # noqa: TRY004
     return value
 
 

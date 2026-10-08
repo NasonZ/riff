@@ -16,8 +16,8 @@ devices reconnect. You ask Claude to work through the sync design with Codex:
 > **You:** Work through the offline sync design with Codex before we implement it.
 > We mustn't silently lose anyone's observations.
 >
-> **Codex:** We could use a CRDT—a data structure that merges concurrent edits—so
-> researchers can edit the same notebook offline. We'd still need to decide how
+> **Codex:** We could use a CRDT, a data structure that merges concurrent edits,
+> so researchers can edit the same notebook offline. We'd still need to decide how
 > conflicting corrections should appear.
 >
 > **Claude, to Codex:** Do these all need to be edits to shared state? Two people
@@ -28,7 +28,7 @@ devices reconnect. You ask Claude to work through the sync design with Codex:
 > **Codex:** Yes: give each observation its own ID and make corrections new records
 > referring to it. Devices exchange records; the notebook view assembles them.
 > That avoids a general text-merge engine. But two corrections to the same entry
-> can still disagree—we've preserved the conflict, not resolved it.
+> can still disagree. We've preserved the conflict without resolving it.
 >
 > **Claude, to Codex:** Then show both corrections and let a researcher reconcile
 > them. Does that choice also need to survive another offline edit?
@@ -89,17 +89,38 @@ so they don't compete for the same requests.
 
 ## Ask for a peer
 
-In a fresh session, ask naturally:
+Ask in plain language. Your agent chooses one of three modes from what you ask
+for, or you can name one:
 
-- “Get Codex's independent take on why this test is flaky.”
-- “Discuss this early idea with Claude and help me see what it could become.”
-- “Have Pi investigate the parser failure, then check its findings.”
-- “Delegate this fix to Codex in a worktree and review the result.”
+| Mode | What comes back | For example |
+|---|---|---|
+| **Consult** | One considered answer: a diagnosis, a review, a reframing, or an idea taken further | "Get Codex's independent take on why this test is flaky." |
+| **Discuss** | A conversation, up to three rounds per peer by default, in which your agent follows up on what's promising or contested | "Discuss this early idea with Claude and help me see what it could become." |
+| **Delegate** | A finished, bounded piece of work with agreed checks; a peer that writes code gets its own worktree | "Delegate this fix to Codex in a worktree and review the result." |
 
-One peer is the default. Name several for a roundtable, choose models or
-providers, or ask for a second instance of the same harness. **Consult** asks for
-an assessment, **discuss** continues over bounded rounds, and **delegate** hands
-over a scoped task with acceptance checks.
+One peer is the default, and you can name the harness, model, or provider for
+each. Several peers are worth their cost when different perspectives or parallel
+work matter:
+
+- different model families answering independently before they see each other's
+  reasoning;
+- the same model asked twice, to find out whether its answer is stable;
+- in delegated work, peers taking separate parts of a task, or one peer's output
+  becoming the next one's input, such as a spec from Claude that a local model
+  implements;
+- a broad review followed by a verifier that looks for one kind of failure.
+
+A peer can also change the question. In research, "which explanation fits?" can
+become "what observation would tell these explanations apart?" A naming task can
+turn out to hinge on what the product is for. Some requests that make room for
+that:
+
+- "Ask Codex what experiment would separate these two explanations before we
+  spend more runs."
+- "We keep circling on names. Discuss with Claude what this product is really
+  for."
+- "Have Claude and my local Qwen model each diagnose this crash without seeing
+  my guess, then compare."
 
 What you share shapes the answer: withhold your diagnosis to get an independent
 one, share a draft to have it critiqued, or give only the aims and constraints to
@@ -112,8 +133,8 @@ rather than counting agreement. See
 ## Match the model to the work
 
 Once discussion has turned an idea into a bounded task, a smaller or local model
-may be enough: “Work out the change with Claude, then have Pi use my local Qwen
-model to implement it in a worktree. Review the diff and run the agreed checks.”
+may be enough: "Work out the change with Claude, then have Pi use my local Qwen
+model to implement it in a worktree. Review the diff and run the agreed checks."
 The peer's tool calls stay in its own session, leaving the driver's context for
 the wider task. Judge the saving over the whole task, including briefing, retries,
 and review. See [delegation quality](references/PLAYBOOK.md#delegation-quality)
