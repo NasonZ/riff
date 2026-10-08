@@ -12,7 +12,7 @@ from scripts.riff_core.models import RunRequest, request_warnings
 
 ROOT = Path(__file__).resolve().parent.parent
 RULE_ID = re.compile(r"RIF-[A-Z]+-\d{3}")
-DEFINITION = re.compile(r"^- `(RIF-[A-Z]+-\d{3})` \[([FRT])\] — ", re.MULTILINE)
+DEFINITION = re.compile(r"^- `(RIF-[A-Z]+-\d{3})` \[([FRT])\]: ", re.MULTILINE)
 LOCAL_LINK = re.compile(r"\]\(((?!https?:)[^)#]+)(?:#[^)]*)?\)")
 
 

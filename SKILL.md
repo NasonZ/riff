@@ -32,10 +32,10 @@ neither of you started with. Follow up to develop what it enables, examine an
 assumption, or find evidence that would distinguish the possibilities. Additional
 turns and agreement are not themselves progress.
 
-- **Consult** — an assessment or contribution, usually from one peer.
-- **Discuss** — follow-up rounds to develop ideas or resolve questions; default
+- **Consult**: an assessment or contribution, usually from one peer.
+- **Discuss**: follow-up rounds to develop ideas or resolve questions; default
   three settled turns per participant, with no obligation to use every round.
-- **Delegate** — a bounded artifact or task under an explicit contract.
+- **Delegate**: a bounded artifact or task under an explicit contract.
 
 Peer turns can take many minutes. Use them when another perspective or a separate
 piece of work is worth that cost. Obey an explicit user roster. When asked only for
@@ -70,16 +70,16 @@ reputation, and agreement do not establish either.
 
 Resolve `RIFF_ROOT` to the directory containing this file. Load detail when needed:
 
-- [references/PLAYBOOK.md](references/PLAYBOOK.md) — choosing between exploration,
+- [references/PLAYBOOK.md](references/PLAYBOOK.md): choosing between exploration,
   critique, and independent assessment; handling disagreement or a consequential
   synthesis. The ordinary one-peer workflow is below.
-- [references/PROTOCOLS.md](references/PROTOCOLS.md) — multi-turn discussions,
+- [references/PROTOCOLS.md](references/PROTOCOLS.md): multi-turn discussions,
   multiple participants, write delegation, or recording different kinds of outcome.
-- [references/HARNESSES.md](references/HARNESSES.md) — the relevant harness section
+- [references/HARNESSES.md](references/HARNESSES.md): the relevant harness section
   when choosing adapter parameters, debugging, or recovering.
-- [references/DESIGN.md](references/DESIGN.md) — changing Riff or working with its
+- [references/DESIGN.md](references/DESIGN.md): changing Riff or working with its
   traces and evaluation design.
-- [references/NOTES.md](references/NOTES.md) — reusable design lessons.
+- [references/NOTES.md](references/NOTES.md): reusable design lessons.
 
 ## Run
 

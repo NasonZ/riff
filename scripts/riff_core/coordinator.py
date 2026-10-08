@@ -255,7 +255,8 @@ class Coordinator:
             self._mark_turn_running(run_id, participant, turn)
             try:
                 result = self._execute_turn(turn)
-            except Exception as error:  # noqa: BLE001 — an adapter crash becomes a recorded failed turn, never a lost run
+            # An adapter crash becomes a recorded failed turn, never a lost run.
+            except Exception as error:  # noqa: BLE001
                 result = self._adapter_failure(participant, turn, error)
             self._record_turn(run_id, participant, turn, result)
         with self.store.run_lock(run_id):
@@ -589,7 +590,8 @@ class Coordinator:
                 participant, turn = futures[future]
                 try:
                     result = future.result()
-                except Exception as error:  # noqa: BLE001 — adapter failures must remain visible as failed turns
+                # Adapter failures must remain visible as failed turns.
+                except Exception as error:  # noqa: BLE001
                     result = self._adapter_failure(participant, turn, error)
                 self._record_turn(run_id, participant, turn, result)
                 results.append(result)
@@ -636,7 +638,8 @@ class Coordinator:
             try:
                 self._mark_turn_running(run_id, participant, turn)
                 result = self._execute_turn(turn)
-            except Exception as error:  # noqa: BLE001 — an adapter crash becomes a recorded failed turn, never a lost run
+            # An adapter crash becomes a recorded failed turn, never a lost run.
+            except Exception as error:  # noqa: BLE001
                 result = self._adapter_failure(participant, turn, error)
             self._record_turn(run_id, participant, turn, result)
             results.append(result)

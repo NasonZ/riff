@@ -33,12 +33,12 @@ Pi harness with different models, providers, thinking settings, or prompts.
 Choose the tool scope from what the acceptance criteria require
 (`RIF-AUTHORITY-002`):
 
-- `none` — reasoning that needs no repository evidence;
-- `read` — inspection of the working directory (add `params.add_dirs` for a Claude
+- `none`: reasoning that needs no repository evidence;
+- `read`: inspection of the working directory (add `params.add_dirs` for a Claude
   peer that must read elsewhere);
-- `read+web` — inspection plus web search and fetch, for claims that must be checked
+- `read+web`: inspection plus web search and fetch, for claims that must be checked
   against external sources (Claude and Codex peers);
-- `write` — only when the user has authorized changes and the participant has an
+- `write`: only when the user has authorized changes and the participant has an
   isolated worktree or writable directory.
 
 A scope too narrow for the task does not fail loudly: the peer is denied, works
@@ -116,11 +116,11 @@ Write the seven-part contract from `PLAYBOOK.md` before launching the worker.
 
 Available dispatch shapes:
 
-- **Single** — one participant owns the task.
-- **Broadcast** — several participants independently produce alternatives or
+- **Single**: one participant owns the task.
+- **Broadcast**: several participants independently produce alternatives or
   analyses. Default only for read-only work.
-- **Split** — participants receive distinct named subtasks.
-- **Pipeline** — a declared artifact from one stage becomes input to the next.
+- **Split**: participants receive distinct named subtasks.
+- **Pipeline**: a declared artifact from one stage becomes input to the next.
 
 Pipeline stages currently exchange local artifact paths, so every stage must share
 the coordinator's filesystem. Use explicit content handoff instead when a future

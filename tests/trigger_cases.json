@@ -22,6 +22,6 @@
     {"prompt": "Summarize the transcript of yesterday's debate between the two models in notes/debate.md.", "near_miss": true},
     {"prompt": "Write a skill that lets Claude call Codex.", "near_miss": true},
     {"prompt": "Why did my codex exec resume --last pick the wrong thread?", "near_miss": true},
-    {"prompt": "Get a second pair of eyes on this function's naming — what would you call it?", "near_miss": true}
+    {"prompt": "Get a second pair of eyes on this function's naming. What would you call it?", "near_miss": true}
   ]
 }
