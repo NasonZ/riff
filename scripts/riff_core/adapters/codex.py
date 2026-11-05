@@ -139,6 +139,10 @@ class CodexAdapter(HarnessAdapter):
             command.extend(
                 ["resume", "--json", "-o", turn.artifact_path]
             )
+            # `codex exec resume` rejects --sandbox and otherwise resumes read-only, so a write participant's reply
+            # would silently lose write access (HARNESSES.md: override with sandbox_mode on resume).
+            if turn.participant.tools == "write":
+                command.extend(["-c", 'sandbox_mode="workspace-write"'])
         else:
             command.extend(
                 [
