@@ -168,6 +168,18 @@ class CoordinatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "reached max_rounds"):
             self.coordinator.reply(started["run_id"], "peer-0", "One more round")
 
+    def test_round_bound_can_be_extended_in_the_same_session(self) -> None:
+        started = self.coordinator.run(self.request(participants=1, max_rounds=1))
+        replied = self.coordinator.reply(started["run_id"], "peer-0", "One more round", extend_rounds=2)
+        self.assertTrue(replied["ok"])
+        self.assertTrue(self.fake.turns[-1].is_reply)
+        self.assertEqual(self.fake.turns[-1].native_session_id, "session-peer-0")
+        manifest = self.coordinator.store.read_manifest(started["run_id"])
+        self.assertEqual(manifest["coordination"]["max_rounds"], 3)
+        self.assertEqual(manifest["round_extensions"][0]["from"], 1)
+        with self.assertRaisesRegex(ValidationError, "extend_rounds must be between"):
+            self.coordinator.reply(started["run_id"], "peer-0", "x", extend_rounds=0)
+
     def test_partial_failure_remains_visible(self) -> None:
         failing = FakeAdapter("fake", fail_ids={"peer-1"})
         coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": failing})

@@ -121,6 +121,7 @@ def command_reply(args: argparse.Namespace) -> dict[str, Any]:
         args.participant,
         _read_prompt(args),
         timeout_seconds=args.timeout_seconds,
+        extend_rounds=args.extend_rounds,
     )
 
 
@@ -206,6 +207,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout-seconds",
         type=int,
         help="override the prior turn timeout for this reply",
+    )
+    reply.add_argument(
+        "--extend-rounds",
+        type=int,
+        help="if this participant has used the run's max_rounds, raise the cap by N (max 20 in all) "
+        "and continue the same native session; recorded in the manifest",
     )
     reply.set_defaults(handler=command_reply)
 

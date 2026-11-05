@@ -100,7 +100,11 @@ sharing views. Follow up on the most useful opening or material disagreement in
 the relevant native session; opaque extracts can help avoid prestige anchoring
 when cross-reviewing several peers.
 
-The default `max_rounds` is three settled turns per participant. Stop sooner when
+The default `max_rounds` is three settled turns per participant; set
+`coordination.max_rounds` (up to 20) when a delegation will need follow-ups. When a
+participant has used the budget and its session still matters, `reply --extend-rounds N`
+raises the cap for that run and continues the same native session (the manifest records
+each extension); a new run starts a fresh session without that context. Stop sooner when
 the user has enough to proceed or another round adds little. Preserve useful
 alternatives and unresolved questions rather than forcing a decision. Use the
 playbook's counterargument pass when agreement appears premature, not as a

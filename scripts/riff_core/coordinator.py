@@ -192,9 +192,14 @@ class Coordinator:
         prompt: str,
         *,
         timeout_seconds: int | None = None,
+        extend_rounds: int | None = None,
     ) -> dict[str, Any]:
         if not prompt.strip():
             raise ValidationError("reply prompt must not be empty")
+        if extend_rounds is not None and (
+            not isinstance(extend_rounds, int) or isinstance(extend_rounds, bool) or not 1 <= extend_rounds <= 17
+        ):
+            raise ValidationError("reply extend_rounds must be between 1 and 17")
         if timeout_seconds is not None and (
             not isinstance(timeout_seconds, int)
             or isinstance(timeout_seconds, bool)
@@ -213,10 +218,24 @@ class Coordinator:
             # timed-out or quota-failed turn being recovered does not. Attempts are
             # still capped so a broken peer cannot loop forever.
             settled_turns = int(participant_state.get("settled_turns", turn_count))
+            if settled_turns >= max_rounds and extend_rounds:
+                # The driver chose to keep this exact native session going rather than
+                # start a fresh one: raise the run's budget (never past the request
+                # bound of 20) and record the extension in the manifest.
+                new_max = min(20, max_rounds + extend_rounds)
+                if new_max > max_rounds:
+                    manifest["coordination"]["max_rounds"] = new_max
+                    manifest.setdefault("round_extensions", []).append(
+                        {"participant": participant_id, "from": max_rounds, "to": new_max,
+                         "at": utc_now()}
+                    )
+                    self.store.write_manifest(run_id, manifest)
+                    max_rounds = new_max
             if settled_turns >= max_rounds:
                 raise ValidationError(
                     f"participant {participant_id} reached max_rounds={max_rounds} "
-                    "settled turns; synthesize, or start a new run if more rounds are needed"
+                    "settled turns; synthesize, reply with --extend-rounds N to keep this "
+                    "session, or start a new run"
                 )
             if turn_count >= ATTEMPT_FACTOR * max_rounds:
                 raise ValidationError(
