@@ -2,7 +2,7 @@
 
 This file contains volatile adapter knowledge. Read only the section for the
 harness being invoked or debugged. Verify flags against the installed version when
-behavior differs; adapter tests are more authoritative than historical examples.
+behaviour differs; adapter tests are more authoritative than historical examples.
 
 ## Contents
 
@@ -62,7 +62,7 @@ state and the Codex source configuration in temporary directories, so they do no
 depend on which harnesses are installed or how they are configured.
 
 For real Codex turns, use a persistent writable state directory rather than `/tmp`.
-The current Codex adapter resolves its sanitized home through `RIFF_STATE_DIR`
+The current Codex adapter resolves its sanitised home through `RIFF_STATE_DIR`
 (or the default state root), independently of the CLI's `--state-dir`. Set that
 environment variable consistently as well when relocating real Codex runs.
 
@@ -165,9 +165,9 @@ Relevant mappings:
   0.160.0 and `[features].web_search` is deprecated, so Riff passes
   `-c web_search="live"` for `read+web` and `-c web_search="disabled"` for every
   other scope. Check the event stream when verifying whether a turn searched;
-- MCP servers are bounded by a sanitized `CODEX_HOME`, not by a flag. Three
+- MCP servers are bounded by a sanitised `CODEX_HOME`, not by a flag. Three
   per-run routes were tried and rejected: `-c mcp_servers={}` merges and is
-  ignored, `-c mcp.enabled=false` is unrecognized, and
+  ignored, `-c mcp.enabled=false` is unrecognised, and
   `-c mcp_servers.<id>.enabled=false` replaces the server's table and breaks
   config loading ("invalid transport"). Riff therefore writes the user's config
   minus every `[mcp_servers.*]` table into `<state>/codex-home`, links
@@ -194,7 +194,7 @@ run is active. If a child dies before the event stream is captured:
    candidate PID's cwd under `/proc/<pid>/cwd`.
 2. Search the dated `sessions/YYYY/MM/DD/rollout-*.jsonl` files using both mtime and
    a distinctive prompt fragment. Do not choose ambient `--last`. Riff's peers write
-   under its sanitized home, `<state>/codex-home/sessions`, not `~/.codex/sessions`;
+   under its sanitised home, `<state>/codex-home/sessions`, not `~/.codex/sessions`;
    a turn record's `native_transcript.path` names the file once the turn settles.
 3. Take the UUID from the confirmed rollout filename and resume it with a short
    situational note. Native resume retains the worker's working memory; a hand-made
@@ -215,7 +215,7 @@ writable roots, which can cause a read-only filesystem error. Request escalation
 for the Riff command, or pass `--state-dir` inside a
 writable root and keep using that same root for `reply`, `progress` and `verify`.
 When a Codex peer is involved, also set `RIFF_STATE_DIR` to that persistent writable
-root: its sanitized home resolves through the environment independently of
+root: its sanitised home resolves through the environment independently of
 `--state-dir`. See [diagnostics](#diagnostics-and-test-seams).
 
 Codex ships a built-in review subcommand that usually beats a hand-written review
@@ -230,7 +230,7 @@ codex exec review --commit <sha> -o <artifact>   # one commit
 
 A `workspace-write` Codex in a linked git worktree cannot commit: the worktree's
 `.git` file points into the parent repository's `.git/worktrees/<name>/`, which is
-outside the sandbox write roots. This is expected sandbox behavior, not a Codex git
+outside the sandbox write roots. This is expected sandbox behaviour, not a Codex git
 bug. Have the driver review and commit from the parent repository, or ask the
 worker for a patch. Do not widen the sandbox to the parent `.git` unless the user
 explicitly accepts the weaker isolation boundary.
@@ -255,7 +255,7 @@ buffered line reader can hold `agent_settled` where a readiness check never sees
 it.
 
 Stream every RPC stdout/stderr event into the turn log while the child runs. The
-coordinator's `progress` command summarizes `message_update` delta types and sizes
+coordinator's `progress` command summarises `message_update` delta types and sizes
 without exposing their text by default. The native session JSONL is authoritative
 for continuation, but it may not persist an in-progress assistant message until the
 next complete assistant/tool boundary.
@@ -321,6 +321,6 @@ silently falling back to unsafe flags.
 ## Local inference servers
 
 llama.cpp and vLLM are inference servers, not complete repository-aware harnesses.
-Use them through Pi when tool use, sessions, skills, or context-file behavior is
+Use them through Pi when tool use, sessions, skills, or context-file behaviour is
 needed. An eventual OpenAI-compatible raw-model adapter may support tool-free
 consultation, but it must not pretend to provide agent-harness semantics.

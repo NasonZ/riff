@@ -38,7 +38,7 @@ Choose the tool scope from what the acceptance criteria require
   peer that must read elsewhere);
 - `read+web`: inspection plus web search and fetch, for claims that must be checked
   against external sources (Claude and Codex peers);
-- `write`: only when the user has authorized changes and the participant has an
+- `write`: only when the user has authorised changes and the participant has an
   isolated worktree or writable directory.
 
 A scope too narrow for the task does not fail loudly: the peer is denied, works
@@ -57,7 +57,7 @@ Default flow:
    `driver_prediction` when useful; it is private to the driver record.
 2. Collect one settled artifact from every participant.
 3. Check material factual claims and assess proposals against the task's aims.
-4. Record the checks, contribution, and remaining uncertainty, then synthesize.
+4. Record the checks, contribution, and remaining uncertainty, then synthesise.
 
 When the user explicitly asks to critique a proposal, send the proposal on the
 first turn with `driver_position: provided` and `driver_position_text`. The latter

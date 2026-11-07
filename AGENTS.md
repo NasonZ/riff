@@ -15,7 +15,7 @@ to share, and a later deletion does not remove Git history.
 
 ## Tests
 
-Test externally observable behavior and genuine coverage gaps. Avoid tautological
+Test externally observable behaviour and genuine coverage gaps. Avoid tautological
 tests, self-testing mocks, and assertions that merely detect wording or layout
-changes. Extend an existing test when it covers the same behavior; combine trivial
+changes. Extend an existing test when it covers the same behaviour; combine trivial
 cases where that improves clarity. A bug fix alone does not justify a new test.

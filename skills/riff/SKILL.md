@@ -117,7 +117,7 @@ A one-peer independent assessment (replace the paths with the task's real inputs
 
 Give every participant a unique `id`. Match tool scope to the task: `none` for
 reasoning without tools, `read` for inspection, `read+web` (Claude and Codex) for
-external sources, or `write` for authorized changes. Read the returned artifacts;
+external sources, or `write` for authorised changes. Read the returned artifacts;
 the run JSON is a handoff, not the peer's answer. `progress --run-id <id>` can
 inspect a live run from another call.
 
@@ -190,7 +190,7 @@ for that disclosure.
 - **An older overlapping skill** can capture a trigger before Riff loads; see
   `HARNESSES.md` for migration.
 - **A sandboxed Codex cannot commit from a linked worktree**; the driver handles
-  authorized integration.
+  authorised integration.
 - **A backgrounded run can die with the driver session.** Use `run --detach` plus
   `wait` for long work. Never pipe Riff output to `tail`; SIGPIPE can kill the run
   when the invoking shell exits.

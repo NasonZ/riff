@@ -32,7 +32,7 @@ The skill guides the driver’s choices:
 - how to elicit independent views;
 - how to structure consultation, discussion, and delegation;
 - how to resist persona and persuasion artifacts; and
-- how to verify and synthesize.
+- how to verify and synthesise.
 
 The coordinator owns fragile mechanics:
 
@@ -64,7 +64,7 @@ Each document serves a different stage of the work, from understanding a design
 choice to applying it in a run:
 
 ```text
-sanitized lesson / public research
+sanitised lesson / public research
             │
             ▼
          NOTES.md
@@ -87,7 +87,7 @@ entrypoint        mode-specific
 Promote a lesson according to what it changes: record publication-safe rationale
 in `NOTES.md`, explain durable judgment in `PLAYBOOK.md`, and put guidance needed on every run in
 `SKILL.md`. Encode mechanical invariants in code and focused tests; evaluate
-judgment through fresh-agent behavior cases. Every lesson need not become an
+judgment through fresh-agent behaviour cases. Every lesson need not become an
 instruction in every layer. Keep volatile harness flags in `HARNESSES.md` and
 their executable contract in adapter tests. Keep private source evidence outside
 the repository; a reusable lesson does not require publishing its source record.
@@ -101,11 +101,11 @@ repository or a shared dataset. Using a configured peer still sends its task and
 context through that harness and provider; local record storage does not imply
 local-only inference.
 
-Skill optimization and model post-training are distinct potential consumers.
+Skill optimisation and model post-training are distinct potential consumers.
 [SkillOpt](https://github.com/microsoft/SkillOpt) edits skill text using scored
 trajectories while keeping model weights frozen, with a held-out validation gate
 for candidate changes. Curated demonstrations or preference examples could instead
-support model post-training. Riff currently supplies neither an optimizer
+support model post-training. Riff currently supplies neither an optimiser
 integration nor a training-data exporter.
 
 The existing records connect participants, session handles, artifact paths and
@@ -136,7 +136,7 @@ A future versioned export layer should assemble selected runs with recoverable
 inputs, relevant artifacts and transcript excerpts, versions, outcome evidence,
 and explicit missing-data markers. Exported content needs deliberate selection and
 redaction rather than copying all ambient session history. The coordinator should
-remain useful without an optimizer or training service.
+remain useful without an optimiser or training service.
 
 For evaluation, separate related runs by task or project when constructing train,
 validation, and test sets; follow-ups from the same problem are not independent
@@ -212,7 +212,7 @@ any current driver
                           └─ RunStore → manifest, turns, artifacts, logs
 ```
 
-In code, orchestration depends only on the normalized adapter boundary:
+In code, orchestration depends only on the normalised adapter boundary:
 
 ```python
 class HarnessAdapter:
@@ -240,13 +240,13 @@ convenience, not a required registry. Each participant declares:
 Adapters fail closed on unknown parameters. This prevents an apparently generic
 `extra_args` field from becoming command injection or a silent portability trap.
 
-Each adapter implements `capability`, `start`, and `reply`, returning a normalized
+Each adapter implements `capability`, `start`, and `reply`, returning a normalised
 settled turn with artifact, native session handle, usage when available, authority
 enforcement level, and explicit failure.
 
 Pi is the normal bridge to llama.cpp/vLLM because it supplies agent semantics above
 their inference endpoints. A raw OpenAI-compatible adapter may be added later for
-tool-free consultation, but must not claim repository-agent behavior.
+tool-free consultation, but must not claim repository-agent behaviour.
 
 ## State and observability
 
@@ -265,7 +265,7 @@ runs/<run-id>/
 Treat the state directory as private data, including artifacts, raw process logs,
 verification output, and native sessions. Detached runs also retain the complete
 request under `detached/`. Metadata redaction checks secret-shaped keys; it does
-not sanitize arbitrary prose, paths, command output, or transcripts. Prompt hashes
+not sanitise arbitrary prose, paths, command output, or transcripts. Prompt hashes
 in manifests do not make the other stored material anonymous or safe to publish.
 
 Riff restricts its `runs/`, `detached/`, and `codex-home/` directories to their owner
@@ -298,7 +298,7 @@ fabricated successful check. Verification distinguishes two kinds of check. A
 duration, output hash, and output tail; with only executed checks the result is
 derived from exit codes, and a claimed `passed` that contradicts a failing command
 is rejected. A `--check` string is recorded as `asserted`: the driver's statement,
-honestly labeled, never presented as executed (`RIF-DELEGATE-002`).
+honestly labelled, never presented as executed (`RIF-DELEGATE-002`).
 
 `validate` and `run` also return lint warnings for valid requests that tend to
 waste or bias a run: a delegation without acceptance criteria or out-of-scope
@@ -365,7 +365,7 @@ directions.
 
 MCP is in no scope, for either harness, and both needed a fix. Claude takes
 `--strict-mcp-config`, which uses only servers named by `--mcp-config`, and Riff
-names none. Codex has no per-run equivalent, so Riff keeps a sanitized
+names none. Codex has no per-run equivalent, so Riff keeps a sanitised
 `CODEX_HOME` beside its own state: a copy of the user's config with every
 `[mcp_servers.*]` table removed, with auth and the model cache linked so
 credentials and model resolution are unchanged. A settled Codex turn reports
@@ -417,14 +417,14 @@ skip or assertions the runner silently ignores.
 
 Two datasets drive forward tests with fresh agents; neither runs in CI because each
 costs model calls. `tests/trigger_cases.json` holds should- and should-not-trigger
-prompts, weighted toward near-misses; rerun it after any description change.
+prompts, weighted towards near-misses; rerun it after any description change.
 `tests/behavior_cases.json` holds scenarios drawn from field failures and explicit
-design aims, with their basis labeled and tied to observable expectations. Run
+design aims, with their basis labelled and tied to observable expectations. Run
 each with and without the change under test and judge the transcript and run
 manifest rather than the driver's summary. Keep private results outside the
-repository; publish only explicitly approved, sanitized findings. Passing
+repository; publish only explicitly approved, sanitised findings. Passing
 deterministic checks establishes the mechanics, not an improvement in model
-behavior. Compare old and new skills in fresh sessions across intended
+behaviour. Compare old and new skills in fresh sessions across intended
 drivers, inspecting contributions, synthesis, limitations, time, and token use.
 Exploration cases also assess whether a useful reframe survives and whether the
 response fits the user's question. Report unmeasured changes as unmeasured.
@@ -433,7 +433,7 @@ Operators may use their own run store as a private evaluation corpus. Manifests
 record mode, participants, timing, results, warnings, verification kinds,
 predictions, and whether the view changed. Linking those records to private
 driver transcripts requires the operator's access and permission. A public
-behavior case or design lesson should not contain the underlying private record.
+behaviour case or design lesson should not contain the underlying private record.
 
 ## Deliberate non-goals
 

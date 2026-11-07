@@ -100,13 +100,13 @@ choosing a recovery. Retrying unchanged credentials or an exhausted quota adds
 cost without resolving the cause.
 
 State transitions and process protocols belong in deterministic tests. Skill
-selection, contribution quality, and synthesis need behavioral evaluation. Use
+selection, contribution quality, and synthesis need behavioural evaluation. Use
 synthetic or explicitly publication-approved material for shared fixtures; keep
 private evaluation evidence in the operator's own storage.
 
 ## Learning under the operator's control
 
-Records can support an operator's own review, skill optimization, or curated
+Records can support an operator's own review, skill optimisation, or curated
 post-training work. These are optional downstream uses, not permission to publish
 runs, copy private transcripts into documentation, or upload them to a service.
 The public repository should preserve the lesson without exposing the source
@@ -177,4 +177,4 @@ the resulting work is better.
 - [AISI: evaluating unintended shortcuts](https://www.aisi.gov.uk/blog/cheating-behaviour-in-frontier-model-evaluations)
 
 These references inform design and evaluation choices; they do not establish that
-Riff's behavioral scenarios pass on a particular model or harness version.
+Riff's behavioural scenarios pass on a particular model or harness version.
