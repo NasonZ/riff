@@ -583,21 +583,23 @@ class CoordinatorTests(unittest.TestCase):
 
     def test_documented_inspection_and_exploration_records_run_through_the_cli(self) -> None:
         root = Path(__file__).resolve().parent.parent
+        skill = root / "skills" / "riff"
         examples = 0
-        for name in ("README.md", "SKILL.md", "references/PROTOCOLS.md"):
-            for block in re.findall(r"```bash\n(.*?)\n```", (root / name).read_text(), re.DOTALL):
+        for path in (root / "README.md", skill / "SKILL.md", skill / "references" / "PROTOCOLS.md"):
+            name = str(path.relative_to(root))
+            for block in re.findall(r"```bash\n(.*?)\n```", path.read_text(), re.DOTALL):
                 if " verify --run-id " not in block or "--run " in block:
                     continue
                 with self.subTest(document=name, block=block):
                     examples += 1
                     started = self.coordinator.run(self.request(participants=1))
-                    command = block.replace('"$RIFF_ROOT/scripts/riff.py"', '"' + str(root / "scripts/riff.py") + '"')
+                    command = block.replace('"$RIFF_ROOT/scripts/riff.py"', '"' + str(skill / "scripts/riff.py") + '"')
                     command = command.replace("<uuid>", started["run_id"]).replace("<run-id>", started["run_id"])
                     command = command.replace("<you>", "test-driver").replace("\\\n", "")
                     completed = subprocess.run(
                         [sys.executable, *shlex.split(command)[1:],
                          "--state-dir", str(self.coordinator.store.root)],
-                        cwd=root, capture_output=True, text=True, check=False,
+                        cwd=skill, capture_output=True, text=True, check=False,
                     )
                     self.assertEqual(completed.returncode, 0, completed.stderr)
                     record = self.coordinator.status(started["run_id"])["manifest"]["verification"]

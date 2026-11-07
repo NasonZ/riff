@@ -167,7 +167,7 @@ class AdapterProcessTests(unittest.TestCase):
                               'session_id': args[args.index('--session-id') + 1]}))
             """,
         )
-        script = str(Path(__file__).resolve().parent.parent / "scripts" / "riff.py")
+        script = str(Path(__file__).resolve().parent.parent / "skills" / "riff" / "scripts" / "riff.py")
         request = self.root / "request.json"
         request.write_text(json.dumps({
             "version": 1, "mode": "consult", "task": "Review.", "origin_harness": "codex",

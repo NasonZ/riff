@@ -62,8 +62,8 @@ Keep one source checkout and link it into the common Agent Skills directory:
 ```bash
 git clone https://github.com/NasonZ/riff ~/src/riff
 mkdir -p ~/.agents/skills ~/.claude/skills
-ln -s ~/src/riff ~/.agents/skills/riff
-ln -s ~/src/riff ~/.claude/skills/riff
+ln -s ~/src/riff/skills/riff ~/.agents/skills/riff
+ln -s ~/src/riff/skills/riff ~/.claude/skills/riff
 ```
 
 Codex and Pi discover `~/.agents/skills`. Claude Code follows the Claude skill
@@ -78,13 +78,12 @@ skills:
 Check which harnesses are available:
 
 ```bash
-cd ~/src/riff
-python3 scripts/riff.py capabilities
+python3 ~/src/riff/skills/riff/scripts/riff.py capabilities
 ```
 
 Riff needs Python 3.11+ and no third-party packages; peers use your installed
 harnesses and configured providers. If older peer skills are installed, follow
-the [migration notes](references/HARNESSES.md#migrate-overlapping-skills-safely)
+the [migration notes](skills/riff/references/HARNESSES.md#migrate-overlapping-skills-safely)
 so they don't compete for the same requests.
 
 ## Ask for a peer
@@ -127,8 +126,8 @@ one, share a draft to have it critiqued, or give only the aims and constraints t
 explore. More rounds don't make an answer right. Models share blind spots and can
 talk each other into mistakes, so the driver weighs reasons and checks evidence
 rather than counting agreement. See
-[choosing the contribution](references/PLAYBOOK.md#choose-the-contribution) and
-[research and limits](references/NOTES.md#research-and-limits).
+[choosing the contribution](skills/riff/references/PLAYBOOK.md#choose-the-contribution) and
+[research and limits](skills/riff/references/NOTES.md#research-and-limits).
 
 ## Match the model to the work
 
@@ -137,8 +136,8 @@ may be enough: "Work out the change with Claude, then have Pi use my local Qwen
 model to implement it in a worktree. Review the diff and run the agreed checks."
 The peer's tool calls stay in its own session, leaving the driver's context for
 the wider task. Judge the saving over the whole task, including briefing, retries,
-and review. See [delegation quality](references/PLAYBOOK.md#delegation-quality)
-and [local inference](references/HARNESSES.md#local-inference-servers).
+and review. See [delegation quality](skills/riff/references/PLAYBOOK.md#delegation-quality)
+and [local inference](skills/riff/references/HARNESSES.md#local-inference-servers).
 
 ## How it works
 
@@ -167,7 +166,7 @@ your agent (in Claude Code / Codex / Pi / Hermes)
 | Pi | Persistent JSONL RPC | provider, model, thinking | none/read/write |
 | Hermes | Explicit quiet-CLI session | provider, model, max turns | none/read; read is prompt-enforced; write disabled |
 
-Use Pi for llama.cpp/vLLM-hosted models. [Harness notes](references/HARNESSES.md)
+Use Pi for llama.cpp/vLLM-hosted models. [Harness notes](skills/riff/references/HARNESSES.md)
 cover controls and enforcement.
 
 ## Records stay local
@@ -178,7 +177,7 @@ records stay in your local state directory, and Riff uploads nothing; the
 harnesses you choose still send peers the task and its context. They let you
 review when a peer changed the work, but they are an evidence index, not a
 training dataset. See
-[learning from runs](references/DESIGN.md#learning-from-runs).
+[learning from runs](skills/riff/references/DESIGN.md#learning-from-runs).
 
 ## Use the coordinator directly
 
@@ -204,8 +203,9 @@ The driver normally writes requests for you. For a direct consult, save this as
 ```
 
 ```bash
-python3 scripts/riff.py validate --request request.json
-python3 scripts/riff.py run --request request.json
+cd ~/src/riff/skills/riff
+python3 scripts/riff.py validate --request /path/to/request.json
+python3 scripts/riff.py run --request /path/to/request.json
 ```
 
 Read the artifact files it returns, then follow its `next_steps`. After checking
@@ -220,18 +220,18 @@ python3 scripts/riff.py verify --run-id <uuid> --verifier claude \
 `--check` records an inspection as asserted; `--run` executes a command and
 records its exit code. Use `--result not_performed` when nothing was checked.
 For long runs, use `run --detach` and then bounded `wait --run-id <uuid>` calls;
-continue with `reply`. [Protocols](references/PROTOCOLS.md) cover the rest.
+continue with `reply`. [Protocols](skills/riff/references/PROTOCOLS.md) cover the rest.
 
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest -v
 ```
 
 Tests cover request contracts, coordinator behavior, and fake harness processes;
 they don't show that a model follows the skill well, which needs fresh-agent
-checks. See [testing strategy](references/DESIGN.md#testing-strategy).
-[The playbook](references/PLAYBOOK.md) explains the collaboration choices and
-[design lessons](references/NOTES.md) the reasoning behind them.
+checks. See [testing strategy](skills/riff/references/DESIGN.md#testing-strategy).
+[The playbook](skills/riff/references/PLAYBOOK.md) explains the collaboration choices and
+[design lessons](skills/riff/references/NOTES.md) the reasoning behind them.
 
 Riff uses the MIT License.

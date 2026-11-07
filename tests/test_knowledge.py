@@ -9,8 +9,8 @@ import unittest
 from pathlib import Path
 
 from scripts.riff_core.models import RunRequest, request_warnings
+from tests import ROOT, SKILL_ROOT as SKILL
 
-ROOT = Path(__file__).resolve().parent.parent
 RULE_ID = re.compile(r"RIF-[A-Z]+-\d{3}")
 DEFINITION = re.compile(r"^- `(RIF-[A-Z]+-\d{3})` \[([FRT])\]: ", re.MULTILINE)
 LOCAL_LINK = re.compile(r"\]\(((?!https?:)[^)#]+)(?:#[^)]*)?\)")
@@ -19,8 +19,8 @@ LOCAL_LINK = re.compile(r"\]\(((?!https?:)[^)#]+)(?:#[^)]*)?\)")
 def knowledge_files() -> list[Path]:
     return [
         path
-        for path in [ROOT / "SKILL.md", ROOT / "README.md", *sorted((ROOT / "references").glob("*.md"))]
-        + sorted((ROOT / "scripts").rglob("*.py"))
+        for path in [SKILL / "SKILL.md", ROOT / "README.md", *sorted((SKILL / "references").glob("*.md"))]
+        + sorted((SKILL / "scripts").rglob("*.py"))
         + sorted((ROOT / "tests").glob("*.json"))
         if "__pycache__" not in path.parts
     ]
@@ -28,7 +28,7 @@ def knowledge_files() -> list[Path]:
 
 class KnowledgeTests(unittest.TestCase):
     def test_every_cited_rule_id_is_defined_once_with_a_basis(self) -> None:
-        design = (ROOT / "references" / "DESIGN.md").read_text()
+        design = (SKILL / "references" / "DESIGN.md").read_text()
         defined = [match.group(1) for match in DEFINITION.finditer(design)]
         self.assertEqual(len(defined), len(set(defined)), "duplicate rule definitions")
         cited: dict[str, set[str]] = {}
@@ -39,8 +39,9 @@ class KnowledgeTests(unittest.TestCase):
         self.assertEqual(undefined, {}, "cited rule IDs missing from DESIGN.md")
 
     def test_documented_requests_are_valid_and_warning_free(self) -> None:
-        for name in ("SKILL.md", "README.md", "references/PROTOCOLS.md"):
-            blocks = re.findall(r"```json\n(.*?)\n```", (ROOT / name).read_text(), re.DOTALL)
+        for path in (SKILL / "SKILL.md", ROOT / "README.md", SKILL / "references" / "PROTOCOLS.md"):
+            name = str(path.relative_to(ROOT))
+            blocks = re.findall(r"```json\n(.*?)\n```", path.read_text(), re.DOTALL)
             self.assertTrue(blocks, f"{name} must show a request example")
             for index, block in enumerate(blocks):
                 with self.subTest(document=name, example=index), tempfile.TemporaryDirectory() as cwd:
@@ -51,21 +52,26 @@ class KnowledgeTests(unittest.TestCase):
                     self.assertEqual(request_warnings(request), [])
 
     def test_skill_body_stays_under_the_documented_line_limit(self) -> None:
-        body = (ROOT / "SKILL.md").read_text().split("---", 2)[2]
+        body = (SKILL / "SKILL.md").read_text().split("---", 2)[2]
         self.assertLess(len(body.splitlines()), 500)  # Anthropic skill-authoring guidance
 
     def test_skill_links_every_reference_directly(self) -> None:
         # Anthropic's guidance keeps references one level deep: an agent may only
         # partly read a file reached through another reference.
-        links = LOCAL_LINK.findall((ROOT / "SKILL.md").read_text())
+        links = LOCAL_LINK.findall((SKILL / "SKILL.md").read_text())
         for link in links:
-            self.assertTrue((ROOT / link).is_file(), f"SKILL.md links to missing {link}")
-        linked = {(ROOT / link).resolve() for link in links}
-        for path in sorted((ROOT / "references").glob("*.md")):
+            self.assertTrue((SKILL / link).is_file(), f"SKILL.md links to missing {link}")
+        linked = {(SKILL / link).resolve() for link in links}
+        for path in sorted((SKILL / "references").glob("*.md")):
             self.assertIn(path.resolve(), linked, f"SKILL.md does not link {path.name}")
 
+    def test_readme_links_resolve_in_the_repository(self) -> None:
+        # The README is read on GitHub, where a moved file becomes a dead link.
+        for link in LOCAL_LINK.findall((ROOT / "README.md").read_text()):
+            self.assertTrue((ROOT / link).exists(), f"README.md links to missing {link}")
+
     def test_long_references_open_with_contents(self) -> None:
-        for path in sorted((ROOT / "references").glob("*.md")):
+        for path in sorted((SKILL / "references").glob("*.md")):
             text = path.read_text()
             if len(text.splitlines()) > 100 and path.name != "NOTES.md":
                 self.assertIn("## Contents", text[:1500], f"{path.name} needs a table of contents")
@@ -80,7 +86,7 @@ class KnowledgeTests(unittest.TestCase):
         self.assertGreater(sum(bool(case.get("near_miss")) for case in negative), len(negative) // 2)
 
         behaviors = json.loads((ROOT / "tests" / "behavior_cases.json").read_text())["cases"]
-        design = (ROOT / "references" / "DESIGN.md").read_text()
+        design = (SKILL / "references" / "DESIGN.md").read_text()
         defined = {match.group(1) for match in DEFINITION.finditer(design)}
         for case in behaviors:
             with self.subTest(case["id"]):

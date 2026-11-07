@@ -97,8 +97,8 @@ promising parts, surface alternatives, or connect the idea to something useful.
 Premature ranking can close possibilities before they are understood; equally,
 exploration should not conceal a factual problem that undermines the premise.
 
-The [README's synthetic field-notebook exchange](../README.md) starts with a
-proposal to merge offline edits. Claude asks whether observations and corrections
+In a synthetic example, a field-notebook app needs to sync edits made offline,
+and the exchange starts with a proposal to merge them. Claude asks whether observations and corrections
 could instead be separate records. Codex develops that design, then identifies a
 consequence: preserving two conflicting corrections does not settle which one to
 use. A further exchange establishes that reconciliation must name the corrections
