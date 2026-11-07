@@ -60,9 +60,22 @@ the conclusions and changes it brings back to the user. Neutral prompts with
 focused questions leave more room for useful reasoning than task-irrelevant
 personas.
 
+A shared brief can preserve a mistaken purpose through otherwise careful work.
+Checking each claim does not establish that the participants answered the question
+the user meant. Treat the meaning of the request as something that may need
+clarifying, especially when different readings imply different work. A user's
+redirection can change the inquiry itself, not merely select among the models'
+existing answers. This is a design rationale for making assumptions visible and
+returning choices of purpose to the user, not a requirement to ask about every
+ordinary implementation choice.
+
 Withhold a proposed answer when seeking an independent assessment. Supply it when
 asking for critique of that proposal. Record uncertainty honestly when there is no
-prior view. These are different starting conditions, not levels of rigor.
+prior view. These are different starting conditions, not levels of rigour.
+For an independent comparison, the driver needs a considered assessment of its own;
+separate sessions alone do not supply one. Likewise, a change of view is not the
+only useful outcome. Participants can develop an explanation, identify a missing
+question, or expose a choice that belongs to the user.
 
 ## Handoffs that survive lost context
 
@@ -75,6 +88,11 @@ Different tasks need different outcome records. Code changes need acceptance
 checks and diff inspection. A factual consult may need source inspection. An
 exploratory exchange may yield a useful question without verifying a claim.
 Preserve these distinctions rather than treating every settled turn as success.
+Preserve the conditions on the evidence too: which uses are authorised, what a
+check actually covers, and which conclusions remain provisional. A handoff that
+retains the facts but loses those conditions can change the meaning of the work.
+Wang et al.'s [handoff study](https://arxiv.org/html/2608.29028) tests one such
+failure; its limits and single-agent comparison are discussed below.
 
 ## Recoverable sessions
 
@@ -133,6 +151,39 @@ every task, or that the current skill outperforms a strong single-agent baseline
   knows. The relevant lesson is to keep perspectives and access to evidence
   distinct. Applying it to peer context is a design inference, not a result the
   paper tested.
+- **Interpreting the request.** Tang et al., [*How Coding Agents Fail Their
+  Users*](https://arxiv.org/html/2605.29442v2), revised 31 August 2026, analyses
+  20,574 sessions and attributes 15.36% of its identified misalignment episodes to
+  underspecified instructions. Its unit is a breakdown visible through developer
+  pushback, not every unnoticed failure; causes are annotated from logs, not
+  experimentally established. Most episodes have no observable resolution in the
+  transcript. For Riff, this motivates preserving the user's purpose and following
+  later corrections, while resisting claims about success based only on the end of a
+  peer turn. It does not establish a general failure rate or show that a second
+  agent would have prevented those breakdowns.
+- **Execution can succeed under the wrong interpretation.** Stoisser et al.,
+  [*Ambig-DS*](https://arxiv.org/html/2605.09698), published 10 May 2026, removes
+  decisive framing information from data-science tasks. On its prediction-target
+  suite, tested frontier agents silently commit to unintended targets in 39–63% of
+  ambiguous runs, despite producing valid submissions. An idealised clarification
+  oracle recovers much of the loss, but the tested policies do not reliably balance
+  asking on ambiguous tasks with restraint on specified ones. This supports
+  examining consequential interpretations before comparing solutions. The suite
+  constructs ambiguity around two framing variables; it neither estimates its
+  prevalence in ordinary work nor tests realistic conversations with stakeholders.
+- **Handoffs must preserve conditions of use.** Wang et al., [*Facts Without
+  Rules*](https://arxiv.org/html/2608.29028), published August 2026, finds that
+  compression can preserve operational facts while losing the audience and
+  disclosure rules attached to them. In controlled downstream tests, explicit rules
+  reduce leakage substantially compared with vague caution. A single agent given the
+  original material with natural-language markers still leaks more than an agent
+  given a handoff that makes those rules operational. The contrast concerns the form
+  of the instructions, not an inherent safety advantage for either topology. Riff's
+  practical inference is to carry constraints and authority beside the facts they
+  govern, and retain access to the original sources. That guidance is not an
+  enforcement guarantee: the study's strongest intervention uses a gold-derived
+  audience allowlist, and inaccurate boundary extraction weakens it. Synthetic
+  scenarios and simulated audiences limit claims about deployment.
 - **Potential gains from debate.** Du et al.,
   [*Improving Factuality and Reasoning in Language Models through Multiagent Debate*](https://arxiv.org/abs/2305.14325),
   reports improvements on its evaluated reasoning and factuality tasks. It
@@ -144,6 +195,25 @@ every task, or that the current skill outperforms a strong single-agent baseline
   result depends on a specified model of belief updates. The practical implication
   is to compare against simpler ways of spending the same budget, and investigate
   what the interaction actually adds.
+- **Different names do not ensure independent errors.** Kohli's [*Nine Judges, Two
+  Effective Votes*](https://arxiv.org/html/2605.29800) published 28 May 2026, tests
+  nine judges from seven families on three natural-language inference datasets and
+  finds about two independent votes' worth of information. Its best single judge
+  matches or outperforms the panel. Replication on a pairwise preference task
+  extends the finding, but open-ended generation and code review remain outside that
+  result's scope. Riff uses disagreement to identify what to investigate; agreement
+  still needs examination of the underlying evidence and assumptions. This is a
+  reason to inspect contributions, not to assume a fixed discount for every
+  collection of models.
+- **Judges can favour familiar outputs.** Pombal et al., [*Self-Preference Bias in
+  Rubric-Based Evaluation*](https://arxiv.org/html/2604.06996v3), revised 3 August
+  2026, finds self- and family-preference even with programmatically verifiable
+  rubrics on instruction-following and coding tasks; strength varies by model and
+  dataset. Combining judges mitigates rather than eliminates the bias, and shared
+  errors remain. This motivates a different-family assessment where useful and
+  checking the underlying claim directly when possible. Rubric grading is not
+  collaborative problem-solving: the result does not show that same-family peers
+  always agree, or that choosing another family establishes independence.
 - **Persuasion can defeat judgment.**
   [*MultiAgent Collaboration Attack*](https://arxiv.org/abs/2406.14711) and
   [*When collaboration fails*](https://www.nature.com/articles/s41598-026-42705-7)
@@ -157,6 +227,15 @@ every task, or that the current skill outperforms a strong single-agent baseline
   examines performance changes from task-irrelevant demographic role assignments.
   These findings motivate Riff's preference for concrete questions over invented
   identities; they do not show that every role instruction is harmful.
+
+Human direction can also develop the inquiry rather than only approve its final
+answer. In its [Navier–Stokes research
+account](https://openai.com/index/navier-stokes-solution/), published 8 September
+2026, OpenAI describes reallocating agents after an intermediate Euler result, then
+consolidating insights into follow-up prompts across groups. This illustrates
+steering from what the agents discover. It is an organisation's report of a large
+research effort with an internal model, not a controlled comparison of coordination
+methods or evidence that Riff's small exchanges will reproduce its outcomes.
 
 For Riff, the empirical questions remain specific: did the exchange reveal a
 useful possibility, correct a consequential error, or improve the eventual work?

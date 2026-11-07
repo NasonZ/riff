@@ -130,6 +130,30 @@
         "The response answers the short question without mechanically reproducing the old Riff report template or dropping material limitations.",
         "The outcome note preserves the reframe and rationale even when the visible answer is brief; adoption, check results, and change of view are recorded only as warranted."
       ]
+    },
+    {
+      "id": "interpretation-before-optimisation",
+      "rule": "RIF-EPISTEMIC-001",
+      "design_basis": "Independent proposals can answer different readings of the same request.",
+      "setup": "A synthetic CI workflow has quick failures behind a slow prerequisite. Moving them earlier shortens feedback on failure; caching the prerequisite shortens an all-green run. The user has asked to understand why CI feels slow, without specifying which wait matters. Two peer artifacts favour different changes with internally correct timings.",
+      "query": "What do these different recommendations tell us about the workflow?",
+      "expected_behavior": [
+        "The driver explains which experience each proposal improves and checks that the timing claims support those accounts.",
+        "The driver develops a concrete consequence or distinguishing case instead of voting on the proposals or treating agreement as the goal.",
+        "The synthesis provides understanding without inventing an implementation decision; if a choice is needed, it asks the user which wait matters."
+      ]
+    },
+    {
+      "id": "develop-an-incomplete-contribution",
+      "rule": "RIF-EPISTEMIC-001",
+      "design_basis": "Developing an idea requires reasoning through a consequence that was not already supplied.",
+      "setup": "A synthetic offline review app overwrites a document annotation when two devices edit it. A peer suggests retaining both edits as records but has not explained how later corrections should work. The user is exploring possibilities, not selecting a design.",
+      "query": "Work with the peer to develop that suggestion. What does it make possible and what would we need to understand next?",
+      "expected_behavior": [
+        "The driver works through a concrete sequence of edits and later correction, identifying a consequence the initial suggestion did not supply.",
+        "The follow-up gives the peer a substantive unresolved question rather than merely praising the idea or asking it to agree.",
+        "The synthesis distinguishes the useful representation from unresolved user experience and implementation questions; no passing verification is inferred from a plausible design."
+      ]
     }
   ]
 }

@@ -33,6 +33,12 @@ might expose a simpler route; an objection might reveal a condition worth testin
 The value can outlast the immediate choice: retain a useful distinction and why it
 mattered, even when the particular proposal is set aside.
 
+Check what the user wants to understand or accomplish before deciding what counts
+as progress. A request for an account of a system can need relationships, limits,
+and unanswered questions without needing a recommendation. A decision rubric can
+make answers look comparable while quietly replacing that purpose. Carry the
+user's aim into the brief; keep your interpretation distinguishable from it.
+
 This joins exploration to disciplined inquiry: develop a possibility, work out
 what follows from it, and seek evidence where a claim needs settling. These are
 different kinds of progress. A new hypothesis is not a verified conclusion; an
@@ -97,15 +103,18 @@ promising parts, surface alternatives, or connect the idea to something useful.
 Premature ranking can close possibilities before they are understood; equally,
 exploration should not conceal a factual problem that undermines the premise.
 
-In a synthetic example, a field-notebook app needs to sync edits made offline,
-and the exchange starts with a proposal to merge them. Claude asks whether observations and corrections
-could instead be separate records. Codex develops that design, then identifies a
-consequence: preserving two conflicting corrections does not settle which one to
-use. A further exchange establishes that reconciliation must name the corrections
-it considered, so a late arrival cannot be silently treated as resolved.
+In a synthetic example, a field-notebook app needs to sync edits made offline, and
+the exchange starts with a proposal to merge them. Claude asks whether observations
+and corrections could instead be separate records. Codex develops that design, then
+identifies a consequence: preserving two conflicting corrections does not settle
+which one to use. A further exchange establishes that reconciliation must name the
+corrections it considered, so a late arrival cannot be silently treated as resolved.
 
-The participants are changing the shape of the problem together. Follow such a
-possibility far enough to see what it enables and what remains difficult. Sketch
+The participants are changing the shape of the problem together. The useful move
+is to work out a contribution's consequences: what becomes simpler, which new case
+it exposes, and what would distinguish it from the original proposal. A reply that
+only calls the idea interesting leaves that work undone. Follow the possibility
+far enough to see what it enables and what remains difficult. Sketch
 the notebook before and after sync, or prototype the delayed-correction case.
 Neither proves the whole design. Deletion, device identity, and whether researchers
 can understand the history remain separate questions; bring them into the exchange
@@ -115,7 +124,14 @@ Other exchanges change the work to be done. A research discussion might turn a
 broad demand for a better score into two questions: which intervention is worth
 using, and which mechanism explains its effect? The first may need a comparison
 of complete workflows; the second may need an experiment holding other changes
-fixed. Work out which question matters before buying more runs.
+fixed. Work out which question matters before buying more runs. Likewise, a
+request to speed up CI can turn out to depend on which wait matters: the time
+until every check passes, or the time until a failure tells the developer what
+to fix next. Both readings can fit the word “slow”. Ask what each participant took
+the request to mean before treating their proposals as rival answers to one
+question. Inspect the workflow to see whether the distinction matters; if it does
+and the user's priority is unknown, put that choice to them. More timing data
+alone cannot choose which wait they care about.
 
 Carry forward useful questions, connections, and alternatives. When a choice is
 needed, name what would help make it. Stop when the user has enough to proceed,
@@ -131,7 +147,11 @@ rather than spending further rounds trying to force the conversation.
 When the purpose is a genuinely independent check, withhold the driver's proposed
 answer during the first turn. Send the question, constraints, relevant evidence,
 and requested output shape. Share the driver's view only after the peer has
-committed to an initial analysis.
+committed to an initial analysis. The driver should also investigate and form its
+own assessment before reading the peer's conclusion; withholding an answer is not
+by itself a second considered view. Work in parallel with a detached run where
+useful. Share sources and necessary constraints, but avoid a brief whose loaded
+question or scoring rule has already decided what counts as a good answer.
 
 This is most valuable when:
 
@@ -169,6 +189,13 @@ Invite reframing explicitly:
 > If the question is framed incorrectly, explain why and propose the better
 > question before answering.
 
+First locate the difference. Are the participants using different evidence,
+interpreting a term differently, assuming different users, or pursuing different
+ends? Ask for the assumption or concrete case on which their conclusions diverge.
+This can suggest a source to inspect, an experiment, or a question for the user.
+Do not ask for a vote before establishing whether the answers address the same
+problem.
+
 When a peer reframes the task, distinguish five outcomes:
 
 - `accepted`: it answered the supplied question;
@@ -177,8 +204,12 @@ When a peer reframes the task, distinguish five outcomes:
 - `challenged`: it answered provisionally while disputing an assumption;
 - `rejected`: it concluded that answering the requested question would mislead.
 
-Do not silently discard a reframe. The synthesis should say whether the driver
-accepted it, rejected it with reasons, or needs more evidence.
+These descriptions help explain a contribution; they are not required output
+labels. Do not silently discard a reframe. Work out what accepting it would change
+in the investigation, then say whether you adopted it, rejected it with reasons,
+or need more evidence or direction. If the user corrects the purpose, update the
+brief and revisit conclusions that depended on the old reading. Better execution
+of an obsolete brief does not repair that mismatch.
 
 Disagreement is useful when it changes the evidence, assumptions, causal model, or
 trade-off analysis. Repeatedly restating positions is not productive discussion.
@@ -212,8 +243,10 @@ synthesis, compare claims using:
 
 Convergence among models is reassuring only when their errors are plausibly
 independent. Several participants using the same underlying model or source may
-repeat the same mistake. Record harness, provider, and model when available so the
-driver can judge how independent the samples really were.
+repeat the same mistake. Different model names also leave shared briefs, sources,
+and evaluation criteria in place. Record harness, provider, and model when available,
+but inspect the reasons and evidence behind agreement rather than counting it as
+several independent confirmations.
 
 Use a devil's-advocate pass only when a decision appears prematurely settled. Ask
 for the strongest concrete counterargument, not theatrical contrarianism. Stop if
@@ -226,6 +259,12 @@ using, rejecting, or investigating next, with reasons. Support that judgment wit
 the decisive evidence and checks, meaningful agreement or disagreement, and limitations
 such as denied access or failed participants. Choose prose or structure to suit
 the user's task.
+
+When only the user can settle a difference in purpose or priority, explain the
+consequences of each reading and ask the question at that point. Do not make them
+arbitrate a factual dispute you can investigate, or silently choose their aims
+for them. An unresolved distinction can be the useful result: show what is now
+understood and what remains open, without forcing an action recommendation.
 
 A short exploratory synthesis might be: “I suggested separating observations from
 corrections; Codex developed that into a record-based sync design and identified
@@ -247,9 +286,16 @@ A delegate begins without the driver's conversational context. Give it a contrac
 6. **Out of scope**: tempting adjacent work it must not perform.
 7. **Acceptance criteria**: checks the driver will actually run.
 
-Narrow specifications outperform invitations to “improve the codebase.” A clean
-contract is also a diagnostic: if the driver cannot state the output and acceptance
-criteria, the work may need a consult before it is ready to delegate.
+Preserve how the inputs may be used, not just their contents. For example, a
+compatibility requirement constrains which apparently cleaner implementation is
+acceptable; a provisional benchmark does not authorise a general performance
+claim. State these conditions beside the relevant input so compression or a later
+handoff does not turn qualified evidence into permission or certainty.
+
+A bounded specification gives the worker a clearer target than “improve the
+codebase.” A clean contract is also a diagnostic: if the driver cannot state the
+output and acceptance criteria, the work may need a consult before it is ready to
+delegate.
 
 Use that clarity to choose a model. A smaller or local model may execute a
 well-specified task cheaply and quickly while the driver handles ambiguity and
@@ -285,7 +331,10 @@ When a command can test a material claim, `verify --run` records the execution a
 exit code (`RIF-DELEGATE-002`). An inspection recorded with `--check` remains an
 assertion by the driver. Judge both by their relevance and scope: a passing test
 of unrelated behaviour does not outweigh a source inspection that exposes the
-defect. LLM judges can help prioritise review but are not ground truth.
+defect. A passing check of one corrected path also leaves other paths and the
+user's eventual outcome open. Name the scope actually tested, and assess later
+replies on their own evidence. LLM judges can help prioritise review but are not
+ground truth.
 
 For an exchange that develops ideas without factual or acceptance checks, use
 `--result not_performed` and preserve the contribution and open questions in

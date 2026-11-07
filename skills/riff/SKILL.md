@@ -63,6 +63,11 @@ sync design yet; unclear which offline changes should coexist or need
 reconciliation” is a useful baseline. Do not invent a prediction or a change of
 mind to complete a record.
 
+Brief from the sources: carry the user's purpose, constraints, and relevant prior
+decisions as well as the facts. Distinguish what the user asked from your reading
+of it. If competing readings would change the work, make that uncertainty explicit
+instead of building it into every participant's brief.
+
 Invite reframing and direct attention to the problem (“check for lost-update
 races”) rather than assigning a persona. Assess factual claims by their evidence
 and ideas by their reasoning and fit to the user's aims; confidence, model
@@ -94,6 +99,10 @@ why a heuristic does not apply. `run` returns artifact paths and `next_steps`; f
 that handoff even if the skill text has left your context. For long runs or shells
 with a per-call limit, use `run --detach` and bounded `wait --run-id <id>` calls.
 Repeat `wait` while it reports `running`; its default bound is about nine minutes.
+When seeking an independent assessment, investigate the question yourself while
+the peer works and form your assessment before reading its conclusion. Use
+`--detach` when useful for this. For critique or bounded delegation, concentrate
+your review on the proposal or delivered work.
 
 A one-peer independent assessment (replace the paths with the task's real inputs):
 
@@ -146,6 +155,11 @@ messaging, or deployment authority implicitly.
 
 ## Assess, record, and respond
 
+Before adopting a peer's recommendations, compare the purpose assumed in your
+brief with the user's actual request. An audience, decision or constraint supplied
+by your own summary remains an interpretation, even if the peer had access to
+the original request. Correct unsupported assumptions before revising the work.
+
 Check material factual claims against code, tests, or sources before relying on
 them. Assess proposals against the user's aims and explain your judgment. A useful
 idea is not thereby a verified fact. For a consult where you checked cited code:
@@ -166,16 +180,18 @@ Re-verifying preserves each record and its check logs. Records identify the turn
 and artifacts assessed; a later reply needs its own assessment. See `PROTOCOLS.md`
 for coverage, historical-record limits, and further examples.
 
-Lead with what the exchange makes possible for the user's work: a recommendation,
-a useful question, a design to try, or a checked result. Attribute the peer's
+Lead with what the exchange makes possible for the user's work: a recommendation, a
+useful question, a design to try, or a checked result. Attribute the peer's
 contribution, explain what it changed or opened up, preserve material disagreement,
 and distinguish checks from judgments and unknowns. Disclose denied access, failed
-participants, and other limitations that affect the result. Give your resulting judgment or the
-next useful question; a short consult can need only a few sentences. Keep a useful
-outcome record even when the user-facing response is brief. Records are private
-operator data: do not copy runs, transcripts, identifiers, or personal context into
-public docs, fixtures, commits, or external services without explicit permission
-for that disclosure.
+participants, and other limitations that affect the result. When the readings differ
+on purpose, priority, or a constraint only the user can settle, explain what turns
+on that choice and put it to them as a question. Continue any useful work that does
+not depend on their answer. A short consult can need only a few sentences. Keep a
+useful outcome record even when the user-facing response is brief. Records are
+private operator data: do not copy runs, transcripts, identifiers, or personal
+context into public docs, fixtures, commits, or external services without explicit
+permission for that disclosure.
 
 ## Gotchas
 

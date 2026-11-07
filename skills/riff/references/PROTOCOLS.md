@@ -55,7 +55,8 @@ Default flow:
 1. Set `driver_position` to `withheld`, `provided`, or `none` according to the
    context you are sending. Record an expectation or uncertainty in
    `driver_prediction` when useful; it is private to the driver record.
-2. Collect one settled artifact from every participant.
+2. For an independent assessment, investigate and form your own view while the
+   peer works; then collect one settled artifact from every participant.
 3. Check material factual claims and assess proposals against the task's aims.
 4. Record the checks, contribution, and remaining uncertainty, then synthesise.
 
@@ -235,7 +236,7 @@ integration. Once the change is actually applied, record it, for example:
 
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
-  --run "python3 -m unittest discover -s tests" --check "Reviewed the parser diff" \
+  --run "python3 -m unittest -v" --check "Reviewed the parser diff" \
   --integrated --note "Applied the reviewed fix; adjacent refactor was left out."
 ```
 
@@ -274,16 +275,20 @@ they are evidence for future evaluation as well as context for the current user.
 
 ## Stopping
 
-Stop a consult after the first settled artifact unless a specific ambiguity needs
-a reply.
+A consult usually needs one settled artifact. Follow up when there is a useful
+idea to develop, an ambiguity to examine, or a consequential claim to check.
 
-Stop a discussion when any of these holds:
+End a discussion when the user has enough understanding or evidence for the
+present purpose, another round adds little, the configured bound is reached, or
+the user asks to stop. Name what remains open. Ending the exchange does not imply
+that the inquiry or implementation is complete.
 
-- the action-relevant disagreements are resolved;
-- remaining disagreement is explained by values or assumptions rather than facts;
-- another round produces no useful development, distinction, or material evidence;
-- the configured round bound is reached; or
-- the user asks to stop.
+A disagreement about assumptions can still be investigated: work through a case
+where they lead to different outcomes. If the remaining choice concerns the
+user's aims or priorities, explain its consequences and ask them, rather than
+spending more rounds trying to make the peers agree. Continue useful work that
+does not depend on that choice. An explanation of the disagreement may itself
+satisfy a request for understanding without producing a decision.
 
 `CONSENSUS` text is not proof of convergence. For a discrete decision, inspect the
 recommendation and unresolved concerns mechanically when structured output exists.

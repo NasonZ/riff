@@ -92,6 +92,14 @@ instruction in every layer. Keep volatile harness flags in `HARNESSES.md` and
 their executable contract in adapter tests. Keep private source evidence outside
 the repository; a reusable lesson does not require publishing its source record.
 
+References are available to readers and agents, but availability is not evidence
+of use. `SKILL.md` routes the driver to relevant sections; the coordinator does not
+automatically load the reference collection into every peer. A trace showing a
+file read establishes access to its text, not understanding or application. Keep
+the entrypoint sufficient for ordinary work, and use behavioural review to see
+whether deeper guidance changes the decisions and contributions it was meant to
+inform.
+
 ## Learning from runs
 
 Run records belong to the operator and stay in their configured local storage.
@@ -447,7 +455,32 @@ deterministic checks establishes the mechanics, not an improvement in model
 behaviour. Compare old and new skills in fresh sessions across intended
 drivers, inspecting contributions, synthesis, limitations, time, and token use.
 Exploration cases also assess whether a useful reframe survives and whether the
-response fits the user's question. Report unmeasured changes as unmeasured.
+response fits the user's question. Also examine whether the driver develops the
+reframe's consequences, recognises when the purpose changes, and returns a choice
+of aims to the user instead of resolving it by model agreement. Retaining a peer's
+phrase or reporting `view_changed` does not establish any of these behaviours.
+
+For discussion, inspect the exchange as well as its individual answers: what was
+challenged, how the other participant answered, and what changed in the reasoning or
+artifact. A first-answer defect does not establish that discussion cannot resolve
+it; a repaired answer does not erase the original error or the cost of repair.
+Distinguish a peer challenge from a self-review prompt. When evaluating a repair,
+compare the revised work with the original objection and check whether it answers
+it, rather than treating acknowledgement or agreement as resolution. A
+counterexample, deduction, or better representation can advance the work using
+evidence already available; additional retrieval or execution is needed when the
+remaining claim requires it.
+
+Where possible, follow the work beyond the immediate synthesis. A corrected claim
+may still support an unsuitable deliverable; a passing targeted check may leave
+the next stage blocked. Trace which contribution changed the later work and what
+was independently checked there. Locate where an unsupported assumption entered
+or a qualification was lost: the brief, the exchange, the driver's synthesis, or
+subsequent implementation. Use that distinction to identify what may need
+improving. Keep that account separate from a causal claim:
+selected successful stories cannot establish an advantage over a strong solo
+agent with the same evidence, tools, and budget. Report unmeasured changes as
+unmeasured.
 
 Operators may use their own run store as a private evaluation corpus. Manifests
 record mode, participants, timing, results, warnings, verification kinds,
