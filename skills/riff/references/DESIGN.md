@@ -225,13 +225,12 @@ In code, orchestration depends only on the normalised adapter boundary:
 ```python
 class HarnessAdapter:
     def capability(self) -> dict: ...
-    def start(self, turn: TurnRequest) -> SettledTurn: ...
-    def reply(self, turn: TurnRequest) -> SettledTurn: ...
+    def execute(self, turn: TurnRequest) -> SettledTurn: ...
 ```
 
 Adding a harness therefore does not add new pairwise Claude↔X, Codex↔X, or Pi↔X
 paths. It adds one compiler from the common turn contract to that harness's native
-protocol.
+protocol. `TurnRequest.is_reply` selects a new or continued native turn.
 
 ## Contracts and adapters
 
@@ -263,22 +262,25 @@ State defaults to `$XDG_STATE_HOME/riff` or `~/.local/state/riff`:
 ```text
 runs/<run-id>/
 ├── run.json
-├── participants/<participant-id>.json
 ├── participants/<participant-id>/...native state...
 ├── turns/<turn-id>.json
 ├── artifacts/<turn-id>.md
 ├── logs/<turn-id>.log
-└── verification/<verification-id>/check-<number>.log
+├── verification/<verification-id>/check-<number>.log
+└── launch/{request.json,stdout.log,stderr.log}  # detached runs
 ```
 
 Treat the state directory as private data, including artifacts, raw process logs,
-verification output, and native sessions. Detached runs also retain the complete
-request under `detached/`. Metadata redaction checks secret-shaped keys; it does
-not sanitise arbitrary prose, paths, command output, or transcripts. Prompt hashes
+verification output, and native sessions. Detached runs retain their complete
+launch request in an owner-only `launch/request.json`. Credential-key redaction
+applies to arbitrary participant `params`, execution `usage`, and `adapter_metadata`
+dictionaries. Domain keys such as participant IDs and coverage maps are preserved.
+Redaction does not sanitise arbitrary prose, paths, command output, or transcripts. Prompt hashes
 in manifests do not make the other stored material anonymous or safe to publish.
 
-Riff restricts its `runs/`, `detached/`, and `codex-home/` directories to their owner
-on POSIX systems, including when reopening existing directories. This does not
+Riff restricts its `runs/`, launch-input, and `codex-home/` directories to their owner
+on POSIX systems when writing them. Public readers never create directories, change
+permissions, or acquire writable locks. This does not
 isolate peers running as that same user. Keep state outside source checkouts and
 shared or automatically synced directories; use the operating system's access
 controls where POSIX modes are not sufficient. The Codex home contains a filtered
@@ -289,10 +291,14 @@ harnesses use their configured providers and can transmit task context or use
 network tools within their granted capabilities. Sharing or exporting records
 requires explicit selection, review, and permission from the data owner.
 
-`run.json` stores coordination metadata, a task digest, references, contract fields,
-the driver's prediction, lint warnings, a git fingerprint of each participant's
-checkout at dispatch, status, and verification with its history. It does not
-duplicate full prompts or artifacts. Turn records store a prompt digest, artifact
+`run.json` is the sole writable execution authority (`schema_version: 2`). It
+contains static coordination metadata, ordered participant specifications and native
+continuation handles, ordered attempt reservations/outcomes, initial dispatch and
+launch disposition, and assessment history. Status, aggregate results, and round
+counts are derived views rather than separately writable fields. Full launch
+requests stay in the private launch-input file; ordinary prompt records contain
+digests. Detailed terminal turn JSON, logs, and artifacts are evidence exports;
+a terminal file alone cannot promote an uncommitted attempt to success. Turn records store a prompt digest, artifact
 path and hash, native session handle, timing, usage, cost where the harness reports
 it, permission denials, the checkout fingerprint at settle, and error, together
 with the driver session and the turn's position in the native session file
@@ -315,18 +321,21 @@ checks begin. Status derives currentness from the latest turns instead of storin
 a flag that a reply could invalidate silently. A later failed attempt does not
 erase evidence about an earlier artifact or inherit its passing result. A fresh
 assessment can acknowledge that failure and become current while the participant
-still shows as failed; this clears the reminder without inventing success. Legacy
-records without coverage remain readable with unknown scope; preserving records
-now cannot restore logs overwritten by an earlier version.
+still shows as failed; this clears the reminder without inventing success. Missing
+coverage or unreadable evidence leaves the assessment scope unknown.
 
 The coordinator snapshots coverage under the run lock, executes commands without
 holding that lock, and compares the current state when recording. A reply during
 checks leaves the record tied to the starting snapshot. This protects attribution,
 not the working tree: checkout fingerprints are limited observations, and neither
 artifact hashes nor a passing command prove that files stayed unchanged. `status`
-uses the same lock when available. For read-only access it falls back to atomic
-file reads and returns `snapshot_consistent: false`, since the files may then
-represent different moments.
+reads one atomically replaced control document without locking or writing. One
+captured control snapshot feeds each response. Referenced evidence may disappear
+independently and is then reported as unknown. Routine status uses the recorded
+artifact hash and checks availability; it does not rehash current artifact contents.
+A newly reserved attempt invalidates assessment currency before it has a terminal
+file. Only `not_performed` may acknowledge an interrupted run with an unsettled
+child; passing checks cannot certify an active orphan.
 
 `validate` and `run` also return lint warnings for valid requests that tend to
 waste or bias a run: a delegation without acceptance criteria or out-of-scope
@@ -345,12 +354,15 @@ when not applicable. A useful exploration with no checks can record
 `not_performed` and its contribution in `note`, without claiming verification.
 
 An initial `run` returns both the aggregate run result and the result of the turns
-it just executed; these are identical on round one. A later `reply` keeps them
-separate: `turn_result` describes that reply, while `result` is recomputed across
-the latest state of every participant. A successful follow-up therefore cannot
+it just executed. These can differ even during initial fanout if a reply overlaps
+another initial participant. `turn_result` and `ok` describe the operation just
+performed; `result` and `status` describe the whole run, including pending dispatch
+and newer replies. A successful follow-up therefore cannot
 launder another participant's failure into overall success. Only settled turns
 spend a participant's `max_rounds`; a failed turn being recovered does not, and
-attempts are capped at twice the budget so a broken peer cannot loop.
+attempts are capped at twice the budget so a broken peer cannot loop. Every durable
+reservation counts as attempted. Dependency-blocked pipeline work is a dispatch
+disposition with failure evidence, and consumes no launched attempt.
 
 For Pi, `progress` can inspect the RPC stream log and native JSONL while a turn is
 active. Its default view exposes operational metadata (event and update counts,
@@ -360,16 +372,85 @@ supplies durable continuation records and may lag until an assistant/tool bounda
 Short content previews require an explicit flag. `run` prints its run ID on stderr
 before it blocks, so the run is addressable from a second shell at once; a
 preallocated `--run-id` remains available for callers that want to choose it.
-`run --detach` starts the coordinator in its own process group and returns at once,
-and `wait` blocks for a bounded time (nine minutes by default) before returning
-either the settled result or "still running". A child backgrounded by a driver's
+`run --detach` creates control state before spawning a gated coordinator and returns
+`starting`. The worker validates its launch token and process identity before
+claiming initial dispatch. A published living worker remains `starting` until that
+claim. `wait` blocks for a bounded time (nine minutes by default), returning the
+settled result, `starting`/`running`, or a truthful `interrupted`/`unknown` observation;
+a failed startup includes captured stderr. A child backgrounded by a driver's
 tool can otherwise die when the driver session ends. Choose wait bounds within
 the calling harness's per-call limit.
 
-Participant mutations use per-participant advisory locks, run aggregates use a run
-lock, and JSON state is written through unique fsynced temporary files followed by
-atomic replacement. This prevents concurrent replies from exceeding their round
-bound or corrupting shared manifests.
+All initial, pipeline, and reply execution uses one attempt lifecycle under a
+participant ownership lock. Concurrent operations on the same participant fail
+fast as busy. Lock ordering is participant lock, then a short run mutation lock;
+execution and verification commands never hold the mutation lock. Reservations
+carry a unique attempt ID, owner token, owner process identity, evidence baseline,
+known session handle, and assigned paths. Observations and terminal commits require
+the same current attempt, token, and active phase. Late evidence remains attached
+to its own attempt and cannot overwrite another attempt or native handle. A null
+terminal handle preserves an already observed handle.
+
+Every attempt records its launch model before spawning. Native POSIX commands use
+an isolated, constant Python exec trampoline that reads exactly one release byte
+and exits on EOF. Child identity and running disposition are committed before
+release. Native Windows commands use direct `Popen` so Riff retains the actual
+native process handle and exit status; that model has no pre-release guarantee.
+Unexpected direct-launch supervision or publication failures remain unproven even
+when no child identity reached control. A normal native failed completion can
+still be recorded as finished.
+
+Detached coordinators use a direct Python child on all platforms. The internal
+worker reads its release byte before any control mutation, then validates its
+actual identity, claim token and request digest. EOF before release cannot claim
+dispatch or start a native turn. Public manifest views omit the internal claim
+token.
+
+POSIX failure cleanup signals only an owned new-session group whose leader is
+still unreaped. TERM, a bounded nonreaping grace period, and KILL all precede the
+final wait. A zombie leader still pins its group ID, so leader exit alone never
+skips KILL on a failure path. Already-reaped group IDs never authorise signals
+from a `/proc` snapshot. Cleanup is idempotent; uncertain post-reap cleanup stays
+unproven unless separate observations establish exit. Embedding hosts must leave
+Riff child reaping to its owning `Popen`: external SIGCHLD handlers or `wait(-1)`
+reapers must not reap those children. On Windows timeout cleanup targets the real
+native process handle, with escalation; descendant-group cleanup is unproven.
+
+After termination, pipe capture drains for at most half a second before closing;
+a log marker records any inherited pipe still open at that limit. Escaped
+processes are not signalled. Later output is unavailable, and background writers
+may encounter a closed pipe. A successfully settled Pi process gets an orderly
+shutdown period with concurrent output draining. Once it exits successfully, its
+background group members are preserved. Normal exits of the one-shot adapters
+also leave surviving descendants alone; they do not inspect or signal them.
+
+Linux recovery identities include PID, start ticks, boot ID, and PID namespace.
+Strong observations require the same PID namespace and boot as the launcher.
+Recycled PIDs are distinct; zombies count as gone. A live member of the recorded
+process group blocks recovery even if its leader exited. Foreign namespaces,
+inaccessible identities, or missing identity fields mean unknown, never gone.
+Processes that deliberately leave the recorded process group are outside this
+proof. Other platforms have alive-only liveness hints for healthy execution;
+absence or inaccessibility remains unknown. Non-Linux POSIX hints use signal zero
+only for records without Linux identity metadata. Windows uses a safe process
+handle query, never `os.kill(pid, 0)`. These hints support ordinary waiting and
+never authorise recovery.
+
+The three one-shot adapters use threaded streaming on Windows anonymous pipes.
+Pi RPC remains POSIX-only. Native Windows and macOS execution have not been
+validated by the Linux test suite. No automatic restart, orphan killing, or
+recovery bypass is offered. Only a recorded exec-gated reservation with a confirmed
+dead owner can use the never-released shortcut. Direct or unspecified launch
+models need positive child/group exit proof; missing child identity stays unknown.
+A running interrupted attempt likewise requires a confirmed dead owner, confirmed
+child/group exit, and a known native handle before reply. Recovery records
+interruption and reserves the next attempt atomically. Queued pipeline work is
+never automatically continued after a crash.
+
+Only current run records with complete attempt history are supported. Older and
+previously migrated records are left untouched and rejected with an actionable
+error. Inspect those archives with the version that created them; start a new run
+for current work. There is no automatic migration or legacy counter reconstruction.
 
 ## Authority
 
@@ -498,4 +579,4 @@ behaviour case or design lesson should not contain the underlying private record
 - No model-majority voting as final judgment.
 - No default persona role-play.
 - No implicit write, commit, push, deployment, or messaging authority.
-- No durable background daemon or cross-process cancellation API in v1.
+- No durable background daemon or cross-process cancellation API.

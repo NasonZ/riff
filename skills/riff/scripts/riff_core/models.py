@@ -6,7 +6,7 @@ import re
 import uuid
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal, TypedDict
 
 Json = None | bool | int | float | str | list["Json"] | dict[str, "Json"]
 Mode = Literal["consult", "discuss", "delegate"]
@@ -44,7 +44,9 @@ def _canonical_uuid(value: Any, field_name: str) -> str:
     try:
         parsed = uuid.UUID(value)
     except ValueError as error:
-        raise ValidationError(f"{field_name} must be a canonical UUID string") from error
+        raise ValidationError(
+            f"{field_name} must be a canonical UUID string"
+        ) from error
     if str(parsed) != value.lower():
         raise ValidationError(f"{field_name} must be a canonical UUID string")
     return value.lower()
@@ -97,7 +99,9 @@ class ParticipantSpec:
                 "participant.id must start with an alphanumeric character and contain "
                 "only alphanumerics, dot, underscore, or hyphen (maximum 64 characters)"
             )
-        harness = _nonempty_string(value.get("harness"), f"participant {participant_id}.harness")
+        harness = _nonempty_string(
+            value.get("harness"), f"participant {participant_id}.harness"
+        )
         tools = value.get("tools", "none")
         if tools not in {"none", "read", "read+web", "write"}:
             raise ValidationError(
@@ -108,10 +112,14 @@ class ParticipantSpec:
             raise ValidationError(f"participant {participant_id}.cwd must be a string")
         cwd = str(Path(raw_cwd or default_cwd).expanduser().resolve())
         if not Path(cwd).is_dir():
-            raise ValidationError(f"participant {participant_id} cwd does not exist: {cwd}")
+            raise ValidationError(
+                f"participant {participant_id} cwd does not exist: {cwd}"
+            )
         params = value.get("params") or {}
         if not isinstance(params, dict):
-            raise ValidationError(f"participant {participant_id}.params must be an object")
+            raise ValidationError(
+                f"participant {participant_id}.params must be an object"
+            )
         model = value.get("model")
         provider = value.get("provider")
         task = value.get("task")
@@ -126,7 +134,11 @@ class ParticipantSpec:
                 raise ValidationError(
                     f"participant {participant_id}.{field_name} must be a string or null"
                 )
-            if field_name in {"model", "provider"} and optional is not None and not optional.strip():
+            if (
+                field_name in {"model", "provider"}
+                and optional is not None
+                and not optional.strip()
+            ):
                 raise ValidationError(
                     f"participant {participant_id}.{field_name} must not be empty"
                 )
@@ -168,9 +180,7 @@ class CoordinationSpec:
         }
         unknown = sorted(set(value) - allowed)
         if unknown:
-            raise ValidationError(
-                "unknown coordination fields: " + ", ".join(unknown)
-            )
+            raise ValidationError("unknown coordination fields: " + ", ".join(unknown))
         default_dispatch = "single" if participant_count == 1 else "broadcast"
         dispatch = value.get("dispatch", default_dispatch)
         if dispatch not in {"single", "broadcast", "split", "pipeline"}:
@@ -180,7 +190,9 @@ class CoordinationSpec:
         if participant_count > 1 and dispatch == "single":
             raise ValidationError("single dispatch requires exactly one participant")
         if participant_count == 1 and dispatch != "single":
-            raise ValidationError(f"{dispatch} dispatch requires at least two participants")
+            raise ValidationError(
+                f"{dispatch} dispatch requires at least two participants"
+            )
         max_rounds = value.get("max_rounds", 3)
         max_depth = value.get("max_depth", 1)
         concurrency = value.get("concurrency", min(4, max(1, participant_count)))
@@ -268,7 +280,8 @@ class RunRequest:
             raise ValidationError("participants must be a non-empty array")
         cwd = default_cwd or str(Path.cwd())
         participants = tuple(
-            ParticipantSpec.from_dict(item, default_cwd=cwd) for item in raw_participants
+            ParticipantSpec.from_dict(item, default_cwd=cwd)
+            for item in raw_participants
         )
         ids = [participant.id for participant in participants]
         if len(ids) != len(set(ids)):
@@ -277,15 +290,20 @@ class RunRequest:
             value.get("coordination"), participant_count=len(participants)
         )
         if coordination.dispatch == "split":
-            missing = [participant.id for participant in participants if not participant.task]
+            missing = [
+                participant.id for participant in participants if not participant.task
+            ]
             if missing:
                 raise ValidationError(
-                    "split dispatch requires participant.task for: " + ", ".join(missing)
+                    "split dispatch requires participant.task for: "
+                    + ", ".join(missing)
                 )
         if coordination.dispatch == "broadcast" and any(
             participant.tools == "write" for participant in participants
         ):
-            raise ValidationError("broadcast dispatch is read-only; use split or pipeline for writes")
+            raise ValidationError(
+                "broadcast dispatch is read-only; use split or pipeline for writes"
+            )
         if coordination.dispatch != "pipeline":
             write_cwds = [
                 (participant.id, Path(participant.cwd))
@@ -309,7 +327,9 @@ class RunRequest:
         if driver_position not in {"withheld", "provided", "none"}:
             raise ValidationError("driver_position must be withheld, provided, or none")
         driver_position_text = value.get("driver_position_text")
-        if driver_position_text is not None and not isinstance(driver_position_text, str):
+        if driver_position_text is not None and not isinstance(
+            driver_position_text, str
+        ):
             raise ValidationError("driver_position_text must be a string or null")
         if driver_position == "provided" and not (driver_position_text or "").strip():
             raise ValidationError(
@@ -456,14 +476,18 @@ def request_warnings(request: RunRequest) -> list[dict[str, str]]:
         for reference in request.context_refs:
             # A relative ref reaches the peer as-is, so it resolves against its cwd.
             path = Path(reference).expanduser()
-            resolved = (path if path.is_absolute() else Path(participant.cwd) / path).resolve()
+            resolved = (
+                path if path.is_absolute() else Path(participant.cwd) / path
+            ).resolve()
             if not any(resolved.is_relative_to(root) for root in readable):
                 warn(
                     "context-ref-outside-cwd",
                     f"{participant.id} cannot read {reference}: it is outside {participant.cwd}; "
                     "add its directory to params.add_dirs or copy the file into the cwd",
                 )
-    web_text = " ".join([request.task, *request.acceptance_criteria, *request.constraints])
+    web_text = " ".join(
+        [request.task, *request.acceptance_criteria, *request.constraints]
+    )
     if WEB_CUE.search(web_text):
         for participant in request.participants:
             if participant.tools in {"none", "read"}:
@@ -498,6 +522,16 @@ def _is_main_checkout(directory: Path) -> bool:
     return False
 
 
+class ProcessIdentity(TypedDict, total=False):
+    """Missing fields deliberately represent an unprovable recovery identity."""
+
+    pid: int
+    start_ticks: int
+    pgid: int
+    boot_id: str
+    pid_namespace: str
+
+
 @dataclass(frozen=True)
 class TurnRequest:
     """Adapter-ready prompt and execution boundary."""
@@ -514,6 +548,13 @@ class TurnRequest:
     is_reply: bool = False
     native_session_id: str | None = None
     native_session_ref: str | None = None
+    launch_model: str | None = None
+    observe_process: Callable[[ProcessIdentity], None] | None = field(
+        default=None, compare=False, repr=False
+    )
+    observe_session: Callable[[str | None, str | None], None] | None = field(
+        default=None, compare=False, repr=False
+    )
 
 
 @dataclass

@@ -21,6 +21,11 @@ Every adapter must:
 
 - resolve its executable without a user-specific absolute path;
 - accept an explicit working directory, model, tool scope, timeout, and parameters;
+- execute new and continued `TurnRequest` values through one `execute` method;
+- publish known native identity through the session observer before terminal return
+  (Claude/Pi preallocate before launch; Codex/Hermes publish from streamed output);
+- publish through the process observer, using the pre-release gate on POSIX and
+  preserving native tool controls on every supported platform;
 - return a stable native session handle for follow-ups;
 - write the final peer response to an artifact;
 - preserve distinct timeout, transport, parse, refusal, permission, model,
@@ -30,6 +35,28 @@ Every adapter must:
 - avoid loading Riff recursively in the child; and
 - preserve the user's explicit model and reasoning controls without inventing a
   small fixed token budget.
+
+The three one-shot adapters use a threaded streaming backend for Windows anonymous
+pipes, which cannot be selected like POSIX descriptors. Early session publication
+is preserved. Windows launches the native executable directly and retains its
+actual process handle and exit status. Native exec gates and group cleanup apply
+on POSIX; group signals require an owned, still-unreaped new-session leader.
+Embedding hosts must not externally reap Riff-owned children. Detached Python
+workers consume their own release byte before claiming state on every platform.
+Linux provides recovery identity proofs within the launcher's PID namespace and
+boot. Other platforms provide alive-only hints; Windows never uses `os.kill` to
+probe a PID. Pi RPC remains POSIX-only.
+
+Pipe capture has a bounded final drain. It records a log marker when descendants
+keep inherited pipes open beyond that limit. Successful Pi shutdown preserves
+background group members, but capture closure can break their later pipe writes.
+On the threaded backend, each reader or writer owns its descriptor until its OS
+call finishes. Shutdown requests stop, makes a bounded join, and leaves a pending
+daemon thread and handle intact until the holder unblocks it. The supervisor never
+closes a descriptor underneath a blocked OS call or waits indefinitely for it.
+`adapter_metadata.output_truncated` accompanies the log marker. Cleanup metadata
+records whether signalling was attempted and whether group termination was owned
+or remains unproven; successful Pi results also report advisory descendant state.
 
 Report enforcement honestly. A native tool allowlist may enforce none/read, while
 a write toolset that includes a general shell still relies on the peer prompt for

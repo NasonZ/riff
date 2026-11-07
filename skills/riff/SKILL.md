@@ -98,7 +98,8 @@ Review validation warnings before an expensive run: fix a real mismatch, or expl
 why a heuristic does not apply. `run` returns artifact paths and `next_steps`; follow
 that handoff even if the skill text has left your context. For long runs or shells
 with a per-call limit, use `run --detach` and bounded `wait --run-id <id>` calls.
-Repeat `wait` while it reports `running`; its default bound is about nine minutes.
+Repeat `wait` while it reports `starting` or `running`; its default bound is about
+nine minutes.
 When seeking an independent assessment, investigate the question yourself while
 the peer works and form your assessment before reading its conclusion. Use
 `--detach` when useful for this. For critique or bounded delegation, concentrate

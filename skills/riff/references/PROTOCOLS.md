@@ -263,12 +263,14 @@ whether the assessment matches the latest attempts; it does not say that checks
 passed or that every participant succeeded. Recording a failure makes the assessment
 current without clearing that failure. A current `not_performed` record still means
 no checks were performed. A new run is unassessed with `current: false`;
-`current: null` indicates unknown scope, including legacy assessments and unreadable
-turn records.
+`current: null` indicates unknown scope, including incomplete assessment evidence
+and unreadable turn records.
 
-Start verification only once the run has settled. If a reply overlaps executed
-checks, the record stays tied to its starting artifacts and its coverage is no
-longer current. This is not isolation of the working directory: another process
+Start verification only once the run has settled. `not_performed` may acknowledge
+an interrupted run without claiming that an orphan child settled or that checks
+passed. A newly reserved, successful, or failed later attempt invalidates currency.
+If a reply overlaps executed checks, the record stays tied to its starting artifacts
+and its coverage is no longer current. This is not isolation of the working directory: another process
 can change files while a command runs. Review the relevant diff and environment
 as well as the exit code. Keep failures, corrections, and reasons for rejection:
 they are evidence for future evaluation as well as context for the current user.
@@ -305,10 +307,14 @@ session when two runs can coexist.
 
 If a process is interrupted:
 
-1. Determine whether it is still running before starting another instance.
+1. Inspect `status` or `progress`; `wait` returns interrupted rather than waiting indefinitely.
 2. Preserve its artifact, log, and native session handle.
-3. Resume the native session with a short situational message.
-4. Restart only when the session cannot be recovered.
+3. Reply only after the owner is confirmed dead and either its attempt never passed
+   a recorded exec gate or its child process group is confirmed gone. Direct or
+   unspecified launch models cannot infer safety from a reservation alone.
+4. Use a short situational message in the exact native session. Unknown or live
+   children block reply; there is no automatic retry, orphan killing, or bypass.
+   Recovery of one pipeline participant does not launch queued participants.
 
 If an intended independent-first prompt accidentally included the driver's answer,
 start a fresh native session. A follow-up cannot undo the initial anchoring.
@@ -324,10 +330,19 @@ Classify a failure before retrying it (`RIF-FAILURE-001`). `rate_limit` and `aut
 fail identically on an unchanged retry: report the stated reset or the credential
 problem, or choose another peer, and never present a self-review as the missing
 peer's. A `reply` to a participant whose turn is still running is refused; if the
-coordinator that launched it has died, the turn counts as interrupted and can be
-resumed.
+coordinator that launched it has died, the attempt is interrupted. Its child may
+still be running, so owner death alone never authorises resume. Same-participant
+operations fail fast as busy while another operation owns its lock.
 
-Riff v1 does not expose a separate cross-process cancellation command. Use bounded
-turn timeouts, and treat an interrupted driver as a recovery event: confirm whether
-each child is still alive before resuming or restarting it. A future durable runner
-must make cancellation reach every child and record it per participant.
+Recovery proofs are supported on Linux using PID, start ticks, boot ID, and PID
+namespace, including checks for living group members after leader exit. Strong
+observations require the same PID namespace and boot as the launcher. Zombies
+count as gone. Foreign namespaces, inaccessible or incomplete identities, and
+non-Linux recovery are unknown and block unsafe resume. The one-shot adapters
+preserve ordinary execution on other platforms using portable pipe streaming; Pi RPC remains POSIX-only. Alive-only hints allow ordinary
+waiting on non-Linux systems; they never establish that an interrupted owner or
+group has exited. Windows uses a safe handle query rather than signal-zero probing.
+Use bounded turn timeouts; Riff has no cross-process cancellation command. Status/result/progress/wait
+are read-only. Older and previously migrated run records are unsupported and left
+unchanged. Use the version that created those archives to inspect them, and start
+a new run for current work.

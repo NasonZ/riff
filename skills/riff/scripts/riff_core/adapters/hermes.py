@@ -10,15 +10,16 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
+from ..process import run_process
 from ..models import SettledTurn, TurnRequest, ValidationError
 from .base import (
     PEER_SYSTEM_NOTE,
     HarnessAdapter,
     classify_error_text,
     executable,
+    failed_turn,
     require_positive_int_param,
     require_supported_params,
-    run_process,
 )
 
 SESSION_PATTERN = re.compile(r"^\s*session_id:\s*(\S+)\s*$", re.MULTILINE)
@@ -65,7 +66,11 @@ class HermesAdapter(HarnessAdapter):
                 ).fetchone()
         except sqlite3.Error:
             return None
-        return {"path": str(database), "session_id": session_id, "last_message_id": row[0] or 0}
+        return {
+            "path": str(database),
+            "session_id": session_id,
+            "last_message_id": row[0] or 0,
+        }
 
     def validate(self, turn: TurnRequest) -> None:
         super().validate(turn)
@@ -116,24 +121,28 @@ class HermesAdapter(HarnessAdapter):
         command.extend(["--query", _query(turn)])
         return command
 
-    def start(self, turn: TurnRequest) -> SettledTurn:
-        return self._run(turn)
+    def execute(self, turn: TurnRequest) -> SettledTurn:
+        def observe_line(stream: str, line: str) -> None:
+            match = SESSION_PATTERN.search(line)
+            if match and turn.observe_session:
+                turn.observe_session(match.group(1), None)
 
-    def reply(self, turn: TurnRequest) -> SettledTurn:
-        return self._run(turn)
-
-    def _run(self, turn: TurnRequest) -> SettledTurn:
-        completed, elapsed_ms, timeout_error = run_process(self.build_command(turn), turn)
+        completed, elapsed_ms, timeout_error = run_process(
+            self.build_command(turn), turn, on_line=observe_line
+        )
         if timeout_error:
             assert completed is not None
             combined = completed.stderr + "\n" + completed.stdout
             match = SESSION_PATTERN.search(combined)
-            return _failed(
+            return failed_turn(
                 turn,
                 elapsed_ms,
                 "timeout",
                 timeout_error,
+                adapter_metadata=completed.metadata,
+                provider=turn.participant.provider,
                 native_session_id=match.group(1) if match else None,
+                authority_enforcement="prompt",
             )
         assert completed is not None
         combined = completed.stderr + "\n" + completed.stdout
@@ -166,6 +175,7 @@ class HermesAdapter(HarnessAdapter):
             elapsed_ms=elapsed_ms,
             error_type=error_type,
             error=error,
+            adapter_metadata=completed.metadata,
             authority_enforcement=(
                 "native-toolset" if turn.participant.tools == "none" else "prompt"
             ),
@@ -174,27 +184,3 @@ class HermesAdapter(HarnessAdapter):
 
 def _query(turn: TurnRequest) -> str:
     return f"{PEER_SYSTEM_NOTE}\n\n{turn.prompt}"
-
-
-def _failed(
-    turn: TurnRequest,
-    elapsed_ms: int,
-    error_type: str,
-    error: str,
-    *,
-    native_session_id: str | None = None,
-) -> SettledTurn:
-    return SettledTurn(
-        participant_id=turn.participant.id,
-        harness="hermes",
-        status="failed",
-        artifact_file=turn.artifact_path,
-        log_file=turn.log_path,
-        native_session_id=native_session_id or turn.native_session_id,
-        model=turn.participant.model,
-        provider=turn.participant.provider,
-        elapsed_ms=elapsed_ms,
-        error_type=error_type,
-        error=error,
-        authority_enforcement="prompt",
-    )

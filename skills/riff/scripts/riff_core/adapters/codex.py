@@ -11,17 +11,17 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from ..process import child_environment, run_process
 from ..models import SettledTurn, TurnRequest, ValidationError
 from ..state import default_state_root, private_directory
 from .base import (
     HarnessAdapter,
-    child_environment,
     classify_error_text,
     executable,
+    failed_turn,
     require_bool_param,
     require_string_param,
     require_supported_params,
-    run_process,
 )
 
 MCP_TABLE = re.compile(r"\s*\[mcp_servers[.\]]")
@@ -43,7 +43,9 @@ def _without_mcp_servers(config: str) -> str:
     try:
         remaining = tomllib.loads(filtered)
     except tomllib.TOMLDecodeError as error:
-        raise ValidationError("Codex configuration could not be safely filtered") from error
+        raise ValidationError(
+            "Codex configuration could not be safely filtered"
+        ) from error
     if remaining.get("mcp_servers"):
         raise ValidationError(
             "Codex MCP configuration uses a form Riff cannot safely remove; "
@@ -124,7 +126,13 @@ class CodexAdapter(HarnessAdapter):
         )
         require_string_param(self.name, turn.participant.params, "reasoning_effort")
         require_bool_param(self.name, turn.participant.params, "skip_git_repo_check")
-        if turn.participant.provider not in {None, "openai", "oss", "ollama", "lmstudio"}:
+        if turn.participant.provider not in {
+            None,
+            "openai",
+            "oss",
+            "ollama",
+            "lmstudio",
+        }:
             raise ValidationError(
                 "codex provider must be openai, oss, ollama, lmstudio, or null"
             )
@@ -136,12 +144,12 @@ class CodexAdapter(HarnessAdapter):
         if turn.is_reply:
             if not turn.native_session_id:
                 raise ValidationError("codex reply requires a native session id")
-            command.extend(
-                ["resume", "--json", "-o", turn.artifact_path]
-            )
+            command.extend(["resume", "--json", "-o", turn.artifact_path])
             # Resume rejects --sandbox. Pin both scopes so neither user defaults
             # nor restored session settings silently change the requested authority.
-            sandbox = "workspace-write" if turn.participant.tools == "write" else "read-only"
+            sandbox = (
+                "workspace-write" if turn.participant.tools == "write" else "read-only"
+            )
             command.extend(["-c", f'sandbox_mode="{sandbox}"'])
         else:
             command.extend(
@@ -152,7 +160,9 @@ class CodexAdapter(HarnessAdapter):
                     "-C",
                     turn.participant.cwd,
                     "--sandbox",
-                    "workspace-write" if turn.participant.tools == "write" else "read-only",
+                    "workspace-write"
+                    if turn.participant.tools == "write"
+                    else "read-only",
                 ]
             )
         # codex-cli enables web search by default, and `[features].web_search` is
@@ -185,32 +195,45 @@ class CodexAdapter(HarnessAdapter):
             command.append("-")
         return command
 
-    def start(self, turn: TurnRequest) -> SettledTurn:
-        return self._run(turn)
-
-    def reply(self, turn: TurnRequest) -> SettledTurn:
-        return self._run(turn)
-
-    def _run(self, turn: TurnRequest) -> SettledTurn:
+    def execute(self, turn: TurnRequest) -> SettledTurn:
         command = self.build_command(turn)
         environment = child_environment(turn)
         environment["CODEX_HOME"] = str(codex_home(turn))
+
+        def observe_line(stream: str, line: str) -> None:
+            if stream != "stdout" or not turn.observe_session:
+                return
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                return
+            if isinstance(event, dict) and event.get("thread_id"):
+                turn.observe_session(str(event["thread_id"]), None)
+
         completed, elapsed_ms, timeout_error = run_process(
-            command, turn, input_text=turn.prompt, environment=environment
+            command,
+            turn,
+            input_text=turn.prompt,
+            environment=environment,
+            on_line=observe_line,
         )
         assert completed is not None
         events, parse_errors = _parse_events(completed.stdout)
         session_id = turn.native_session_id or _find_key(events, "thread_id")
         artifact_path = Path(turn.artifact_path)
-        artifact = artifact_path.read_text() if artifact_path.is_file() else _last_text(events)
+        artifact = (
+            artifact_path.read_text() if artifact_path.is_file() else _last_text(events)
+        )
         if artifact and not artifact_path.is_file():
             artifact_path.write_text(artifact)
         if timeout_error:
-            return _failed(
+            return failed_turn(
                 turn,
                 elapsed_ms,
                 "timeout",
                 timeout_error,
+                adapter_metadata=completed.metadata,
+                provider=turn.participant.provider or "openai",
                 native_session_id=str(session_id) if session_id else None,
             )
         error: str | None = None
@@ -273,6 +296,7 @@ class CodexAdapter(HarnessAdapter):
                 else "native-sandbox"
             ),
             adapter_metadata={
+                **completed.metadata,
                 "mcp_servers_suppressed": True,
                 "event_count": len(events),
                 "parse_errors": parse_errors,
@@ -346,26 +370,3 @@ def _last_usage(events: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(usage, dict):
             return usage
     return {}
-
-
-def _failed(
-    turn: TurnRequest,
-    elapsed_ms: int,
-    error_type: str,
-    error: str,
-    *,
-    native_session_id: str | None = None,
-) -> SettledTurn:
-    return SettledTurn(
-        participant_id=turn.participant.id,
-        harness="codex",
-        status="failed",
-        artifact_file=turn.artifact_path,
-        log_file=turn.log_path,
-        native_session_id=native_session_id or turn.native_session_id,
-        model=turn.participant.model,
-        provider=turn.participant.provider or "openai",
-        elapsed_ms=elapsed_ms,
-        error_type=error_type,
-        error=error,
-    )

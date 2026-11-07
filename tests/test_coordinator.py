@@ -17,6 +17,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.riff_core.adapters.base import HarnessAdapter
+from scripts.riff_core.adapters.pi import PiAdapter
 from scripts.riff_core.coordinator import Coordinator
 from scripts.riff_core.models import (
     RunRequest,
@@ -36,13 +37,7 @@ class FakeAdapter(HarnessAdapter):
     def capability(self):
         return {"harness": self.name, "available": True, "persistent_sessions": True}
 
-    def start(self, turn: TurnRequest) -> SettledTurn:
-        return self._settle(turn)
-
-    def reply(self, turn: TurnRequest) -> SettledTurn:
-        return self._settle(turn)
-
-    def _settle(self, turn: TurnRequest) -> SettledTurn:
+    def execute(self, turn: TurnRequest) -> SettledTurn:
         self.turns.append(turn)
         failed = turn.participant.id in self.fail_ids
         artifact = Path(turn.artifact_path)
@@ -145,9 +140,9 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(manifest["request"]["driver_prediction"], "Option B wins unless the cache is shared.")
 
     def test_reply_uses_the_exact_native_session(self) -> None:
-        with patch("scripts.riff_core.coordinator.utc_now", return_value="2026-01-01T00:00:00Z"):
+        with patch("scripts.riff_core.lifecycle.utc_now", return_value="2026-01-01T00:00:00Z"):
             started = self.coordinator.run(self.request(participants=1))
-        with patch("scripts.riff_core.coordinator.utc_now", return_value="2026-01-02T00:00:00Z"):
+        with patch("scripts.riff_core.lifecycle.utc_now", return_value="2026-01-02T00:00:00Z"):
             replied = self.coordinator.reply(
                 started["run_id"],
                 "peer-0",
@@ -174,7 +169,7 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(replied["ok"])
         self.assertTrue(self.fake.turns[-1].is_reply)
         self.assertEqual(self.fake.turns[-1].native_session_id, "session-peer-0")
-        manifest = self.coordinator.store.read_manifest(started["run_id"])
+        manifest = self.coordinator.store.read_control(started["run_id"])
         self.assertEqual(manifest["coordination"]["max_rounds"], 3)
         self.assertEqual(manifest["round_extensions"][0]["from"], 1)
         with self.assertRaisesRegex(ValidationError, "extend_rounds must be between"):
@@ -205,10 +200,10 @@ class CoordinatorTests(unittest.TestCase):
 
     def test_pipeline_adapter_failure_is_contained_and_dependents_are_recorded(self) -> None:
         class RaisingAdapter(FakeAdapter):
-            def start(self, turn: TurnRequest) -> SettledTurn:
+            def execute(self, turn: TurnRequest) -> SettledTurn:
                 if turn.participant.id == "peer-0":
                     raise RuntimeError("seeded adapter crash")
-                return super().start(turn)
+                return super().execute(turn)
 
         request = RunRequest.from_dict(
             {
@@ -259,7 +254,10 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(state["turn_count"], 2)
 
     def test_progress_reads_pi_trace_without_revealing_content_by_default(self) -> None:
-        pi = FakeAdapter("pi")
+        class FakePiAdapter(FakeAdapter, PiAdapter):
+            pass
+
+        pi = FakePiAdapter("pi")
         coordinator = Coordinator(store=self.coordinator.store, adapters={"pi": pi})
         request = RunRequest.from_dict(
             {
@@ -315,10 +313,10 @@ class CoordinatorTests(unittest.TestCase):
         release = threading.Event()
 
         class BlockingAdapter(FakeAdapter):
-            def start(self, turn: TurnRequest) -> SettledTurn:
+            def execute(self, turn: TurnRequest) -> SettledTurn:
                 entered.set()
                 release.wait(timeout=5)
-                return super().start(turn)
+                return super().execute(turn)
 
         coordinator = Coordinator(
             store=self.coordinator.store, adapters={"fake": BlockingAdapter("fake")}
@@ -354,16 +352,23 @@ class CoordinatorTests(unittest.TestCase):
     def test_turn_records_bound_each_episode_in_the_native_session(self) -> None:
         native = Path(self.temporary.name) / "native"
         native.mkdir()
+        native_mode = "append"
 
         class NativeAdapter(FakeAdapter):
             def native_transcript(self, session_id, session_ref):
                 path = native / f"{session_id}.jsonl"
                 return path if session_id and path.is_file() else None
 
-            def _settle(self, turn: TurnRequest) -> SettledTurn:
-                settled = super()._settle(turn)
-                with (native / f"{settled.native_session_id}.jsonl").open("a") as stream:
-                    stream.write(json.dumps({"id": f"entry-{len(self.turns)}"}) + "\n")
+            def execute(self, turn: TurnRequest) -> SettledTurn:
+                settled = super().execute(turn)
+                path = native / f"{settled.native_session_id}.jsonl"
+                if native_mode == "rewrite":
+                    path.write_text("{\n")
+                elif native_mode == "unavailable":
+                    path.unlink()
+                else:
+                    with path.open("a") as stream:
+                        stream.write(json.dumps({"id": f"entry-{len(self.turns)}"}) + "\n")
                 return settled
 
         coordinator = Coordinator(
@@ -390,6 +395,20 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(coordinator.status(run_id)["manifest"]["driver_session"], driver)
         self.assertEqual(read_json(Path(state["turns"][1]))["driver_session"], driver)
 
+        native_mode = "rewrite"
+        coordinator.reply(run_id, "peer-0", "Continue after rotation.", extend_rounds=2)
+        state = coordinator.status(run_id)["participant_state"]["peer-0"]
+        rewritten = read_json(Path(state["turns"][-1]))["native_transcript"]
+        self.assertIsNone(rewritten["start_offset"])
+        self.assertIsNone(rewritten["last_entry_id"])
+        self.assertEqual(rewritten["end_offset"], session_file.stat().st_size)
+        self.assertEqual(rewritten["sha256"], hashlib.sha256(session_file.read_bytes()).hexdigest())
+
+        native_mode = "unavailable"
+        coordinator.reply(run_id, "peer-0", "Continue without a retained trace.")
+        state = coordinator.status(run_id)["participant_state"]["peer-0"]
+        self.assertIsNone(read_json(Path(state["turns"][-1]))["native_transcript"])
+
     def test_database_backed_sessions_record_the_message_ids_each_turn_added(self) -> None:
         stored = {"session-peer-0": 0}
 
@@ -399,9 +418,9 @@ class CoordinatorTests(unittest.TestCase):
                     return None
                 return {"path": "/db", "session_id": session_id, "last_message_id": stored[session_id]}
 
-            def _settle(self, turn: TurnRequest) -> SettledTurn:
+            def execute(self, turn: TurnRequest) -> SettledTurn:
                 stored["session-peer-0"] += 3  # this turn's rows
-                return super()._settle(turn)
+                return super().execute(turn)
 
         coordinator = Coordinator(
             store=self.coordinator.store, adapters={"fake": DatabaseAdapter("fake")}
@@ -413,23 +432,30 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual((first["start_message_id"], first["end_message_id"]), (0, 3))
         self.assertEqual((second["start_message_id"], second["end_message_id"]), (3, 6))
 
-    def test_stale_active_turn_does_not_supply_another_turns_start(self) -> None:
+    def test_late_finish_cannot_clear_replacement_attempt_or_session(self) -> None:
         store = self.coordinator.store
 
         class StaleAdapter(FakeAdapter):
-            def start(self, turn: TurnRequest) -> SettledTurn:
-                state = store.read_participant(turn.run_id, turn.participant.id)
-                state["active_turn"]["turn_id"] = "unrelated-turn"
-                state["active_turn"]["started_at"] = "2020-01-01T00:00:00Z"
-                store.write_participant(turn.run_id, turn.participant.id, state)
-                return super().start(turn)
+            def execute(self, turn: TurnRequest) -> SettledTurn:
+                settled = super().execute(turn)
+                with store.mutation(turn.run_id) as control:
+                    original = control["attempts"][-1]
+                    replacement = {**original, "id": "replacement-attempt", "owner_token": "replacement-owner"}
+                    original.update(phase="finished", outcome={"status": "interrupted"})
+                    control["attempts"].append(replacement)
+                    control["participant_specs"][turn.participant.id]["native_session_id"] = "replacement-session"
+                return settled
 
         coordinator = Coordinator(store=store, adapters={"fake": StaleAdapter("fake")})
         result = coordinator.run(self.request(participants=1))
         state = coordinator.status(result["run_id"])["participant_state"]["peer-0"]
-        recorded = read_json(Path(state["turns"][0]))
-        self.assertIsNone(recorded["started_at"])
-        self.assertIsNotNone(recorded["settled_at"])
+        self.assertEqual(state["active_turn"]["turn_id"], "replacement-attempt")
+        self.assertEqual(state["native_session_id"], "replacement-session")
+        self.assertEqual(state["settled_turns"], 0)
+        control = store.read_control(result["run_id"])
+        diagnostic = control["attempts"][0]["diagnostics"][0]["late_terminal_file"]
+        self.assertTrue(Path(diagnostic).is_file())
+        self.assertEqual(result["status"], "running")
 
     def test_recursive_child_is_rejected_at_the_depth_bound(self) -> None:
         with patch.dict(
@@ -507,7 +533,7 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(len(paths), len(set(paths)))
         self.assertIn("suite ok", paths[0].read_text())
 
-    def test_verification_scope_tracks_replies_failures_and_legacy_records(self) -> None:
+    def test_verification_scope_tracks_replies_failures_and_missing_evidence(self) -> None:
         run_id = self.coordinator.run(self.request(participants=1))["run_id"]
         self.coordinator.verify(run_id, verifier="driver", result=None, checks=[],
                                 integrated=False, commands=["printf checked"])
@@ -535,10 +561,9 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(assessed["participants"], {"peer-0": "failed"})
         self.fake.fail_ids.clear()
         self.assertNotIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
-        # Legacy records remain readable, but cannot certify a later turn.
-        manifest = self.coordinator.store.read_manifest(run_id)
-        manifest["verification"].pop("covers")
-        self.coordinator.store.write_manifest(run_id, manifest)
+        # Missing coverage cannot certify a later turn.
+        with self.coordinator.store.mutation(run_id) as control:
+            control["assessments"][-1].pop("covers")
         self.assertIsNone(self.coordinator.status(run_id)["verification_scope"]["current"])
         self.assertNotIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
 
@@ -617,20 +642,20 @@ class CoordinatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "max_rounds=1 settled turns"):
             coordinator.reply(recovering["run_id"], "peer-0", "One more.")
 
-    def test_reply_refuses_a_live_running_turn_but_recovers_a_dead_one(self) -> None:
+    def test_reply_refuses_a_live_running_turn_but_recovers_a_dead_reservation(self) -> None:
+        from scripts.riff_core.process import identity
         started = self.coordinator.run(self.request(participants=1))
         store = self.coordinator.store
-        state = store.read_participant(started["run_id"], "peer-0")
-        state["status"] = "running"
-        state["active_turn"] = {"started_at": "now", "coordinator_pid": os.getpid()}
-        store.write_participant(started["run_id"], "peer-0", state)
+        with store.mutation(started["run_id"]) as control:
+            previous = control["attempts"][-1]
+            control["attempts"].append({**previous, "id": "reserved-attempt", "phase": "reserved",
+                "owner": identity(), "turn_file": None, "outcome": None})
         with self.assertRaisesRegex(ValidationError, "verification requires a settled run"):
-            self.coordinator.verify(started["run_id"], verifier="driver", result="not_performed",
-                                    checks=[], integrated=False)
+            self.coordinator.verify(started["run_id"], verifier="driver", result="not_performed", checks=[], integrated=False)
         with self.assertRaisesRegex(ValidationError, "still has a running turn"):
             self.coordinator.reply(started["run_id"], "peer-0", "Anything new?")
-        state["active_turn"]["coordinator_pid"] = 2**22 + 12345  # beyond pid_max
-        store.write_participant(started["run_id"], "peer-0", state)
+        with store.mutation(started["run_id"]) as control:
+            control["attempts"][-1]["owner"]["pid"] = 2**22 + 12345
         self.assertTrue(self.coordinator.reply(started["run_id"], "peer-0", "Resume.")["ok"])
 
     def test_next_steps_fit_the_run_and_survive_without_the_skill(self) -> None:
@@ -688,8 +713,8 @@ class CoordinatorTests(unittest.TestCase):
 
     def test_timeout_next_step_resumes_the_same_session_with_a_longer_bound(self) -> None:
         class TimingOut(FakeAdapter):
-            def _settle(self, turn: TurnRequest) -> SettledTurn:
-                settled = super()._settle(turn)
+            def execute(self, turn: TurnRequest) -> SettledTurn:
+                settled = super().execute(turn)
                 settled.status, settled.error_type = "failed", "timeout"
                 settled.error = "Pi turn did not settle within 7200 seconds"
                 return settled
@@ -754,9 +779,10 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(waited["next_steps"])
 
         store = self.coordinator.store
-        manifest = store.read_manifest(started["run_id"])
-        manifest["status"] = "running"
-        store.write_manifest(started["run_id"], manifest)
+        with store.mutation(started["run_id"]) as control:
+            previous = control["attempts"][-1]
+            control["attempts"].append({**previous, "id": "active-attempt", "phase": "reserved",
+                                      "turn_file": None, "outcome": None})
         running = self.coordinator.wait(started["run_id"], timeout_seconds=1, poll_seconds=0.2)
         self.assertEqual(running["status"], "running")
         self.assertIn("wait --run-id", running["next_steps"][0])

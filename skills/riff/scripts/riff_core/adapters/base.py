@@ -5,9 +5,6 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import signal
-import subprocess
-import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -35,100 +32,12 @@ def executable(name: str, env_name: str) -> str:
     return str(path)
 
 
-# Harnesses name their session in the environment of the commands they run. A
-# peer must not inherit the driver's: a Claude CLI started without --session-id
-# adopts CLAUDE_CODE_SESSION_ID and writes under the driver's session id.
-DRIVER_SESSION_VARIABLES = (
-    "CLAUDE_CODE_SESSION_ID",
-    "CODEX_THREAD_ID",
-    "CODEX_SESSION_ID",
-    "PI_SESSION_ID",
-    "PI_SESSION_FILE",
-    "HERMES_SESSION_ID",
+RATE_LIMIT_TEXT = re.compile(
+    r"\b429\b|rate.?limit|usage limit|session limit|quota", re.IGNORECASE
 )
-
-
-def child_environment(turn: TurnRequest) -> dict[str, str]:
-    environment = os.environ.copy()
-    for variable in DRIVER_SESSION_VARIABLES:
-        environment.pop(variable, None)
-    environment["RIFF_RUN_ID"] = turn.run_id
-    environment["RIFF_DEPTH"] = str(turn.depth + 1)
-    environment["RIFF_PARTICIPANT_ID"] = turn.participant.id
-    return environment
-
-
-def run_process(
-    command: list[str],
-    turn: TurnRequest,
-    *,
-    input_text: str | None = None,
-    environment: dict[str, str] | None = None,
-) -> tuple[subprocess.CompletedProcess[str] | None, int, str | None]:
-    started = time.monotonic()
-    process = subprocess.Popen(
-        command,
-        cwd=turn.participant.cwd,
-        env=environment or child_environment(turn),
-        stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
-    try:
-        stdout, stderr = process.communicate(input=input_text, timeout=turn.timeout_seconds)
-    except subprocess.TimeoutExpired:
-        _terminate_process_group(process)
-        stdout, stderr = process.communicate()
-        completed = subprocess.CompletedProcess(
-            command,
-            process.returncode,
-            stdout,
-            stderr,
-        )
-        elapsed_ms = round((time.monotonic() - started) * 1000)
-        Path(turn.log_path).write_text("\n".join(part for part in (stdout, stderr) if part))
-        return completed, elapsed_ms, f"timed out after {turn.timeout_seconds} seconds"
-    except BaseException:
-        _terminate_process_group(process)
-        stdout, stderr = process.communicate()
-        Path(turn.log_path).write_text("\n".join(part for part in (stdout, stderr) if part))
-        raise
-    completed = subprocess.CompletedProcess(
-        command,
-        process.returncode,
-        stdout,
-        stderr,
-    )
-    elapsed_ms = round((time.monotonic() - started) * 1000)
-    Path(turn.log_path).write_text(
-        "\n".join(
-            part for part in (completed.stdout, completed.stderr) if part
-        )
-    )
-    return completed, elapsed_ms, None
-
-
-def _terminate_process_group(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except (OSError, ProcessLookupError):
-            process.kill()
-        process.wait(timeout=5)
-
-
-RATE_LIMIT_TEXT = re.compile(r"\b429\b|rate.?limit|usage limit|session limit|quota", re.IGNORECASE)
-AUTH_TEXT = re.compile(r"\b40[13]\b|unauthori[sz]ed|incorrect api key|invalid api key", re.IGNORECASE)
+AUTH_TEXT = re.compile(
+    r"\b40[13]\b|unauthori[sz]ed|incorrect api key|invalid api key", re.IGNORECASE
+)
 
 
 def classify_error_text(text: str | None) -> str | None:
@@ -184,11 +93,8 @@ class HarnessAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def start(self, turn: TurnRequest) -> SettledTurn:
-        raise NotImplementedError
-
-    @abstractmethod
-    def reply(self, turn: TurnRequest) -> SettledTurn:
+    def execute(self, turn: TurnRequest) -> SettledTurn:
+        """Execute a new or continued turn, as specified by turn.is_reply."""
         raise NotImplementedError
 
     def native_transcript(
@@ -207,8 +113,50 @@ class HarnessAdapter(ABC):
         database, the session, and the id of its latest stored message."""
         return None
 
+    def live_progress(
+        self,
+        state_path: Path,
+        log_dir: Path,
+        *,
+        participant_id: str,
+        active_log: str | None,
+        session_ref: str | None,
+        include_previews: bool,
+    ) -> dict[str, Any]:
+        """Optional live evidence from this harness's logs and native session."""
+        return {}
+
     def validate(self, turn: TurnRequest) -> None:
         if turn.participant.harness != self.name:
             raise ValidationError(
                 f"adapter {self.name} cannot run harness {turn.participant.harness}"
             )
+
+
+def failed_turn(
+    turn: TurnRequest,
+    elapsed_ms: int,
+    error_type: str,
+    error: str,
+    *,
+    provider: str | None,
+    native_session_id: str | None = None,
+    authority_enforcement: str = "native",
+    adapter_metadata: dict[str, Any] | None = None,
+) -> SettledTurn:
+    """A failed adapter turn retaining any known native session identity."""
+    return SettledTurn(
+        participant_id=turn.participant.id,
+        harness=turn.participant.harness,
+        status="failed",
+        artifact_file=turn.artifact_path,
+        log_file=turn.log_path,
+        native_session_id=native_session_id or turn.native_session_id,
+        model=turn.participant.model,
+        provider=provider,
+        elapsed_ms=elapsed_ms,
+        error_type=error_type,
+        error=error,
+        authority_enforcement=authority_enforcement,
+        adapter_metadata=adapter_metadata or {},
+    )

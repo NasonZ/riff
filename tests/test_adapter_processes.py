@@ -82,8 +82,8 @@ class AdapterProcessTests(unittest.TestCase):
         )
         adapter = ClaudeAdapter()
         with patch.dict(os.environ, {"RIFF_CLAUDE_BIN": fake}):
-            started = adapter.start(self.turn("claude", suffix="claude-start"))
-            replied = adapter.reply(
+            started = adapter.execute(self.turn("claude", suffix="claude-start"))
+            replied = adapter.execute(
                 self.turn(
                     "claude",
                     suffix="claude-reply",
@@ -106,10 +106,12 @@ class AdapterProcessTests(unittest.TestCase):
         turn = self.turn("claude", suffix="claude-timeout")
         turn = TurnRequest(**{**turn.__dict__, "timeout_seconds": 1})
         with patch.dict(os.environ, {"RIFF_CLAUDE_BIN": fake}):
-            result = ClaudeAdapter().start(turn)
+            result = ClaudeAdapter().execute(turn)
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "timeout")
         self.assertIsNotNone(result.native_session_id)
+        self.assertIsNone(result.provider)
+        self.assertEqual(result.authority_enforcement, "native")
 
     def test_claude_is_error_payload_is_not_reported_as_success(self) -> None:
         fake = self.executable(
@@ -124,7 +126,7 @@ class AdapterProcessTests(unittest.TestCase):
             """,
         )
         with patch.dict(os.environ, {"RIFF_CLAUDE_BIN": fake}):
-            result = ClaudeAdapter().start(self.turn("claude", suffix="claude-error"))
+            result = ClaudeAdapter().execute(self.turn("claude", suffix="claude-error"))
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "model")
         self.assertEqual(result.error, "seeded Claude failure")
@@ -144,7 +146,7 @@ class AdapterProcessTests(unittest.TestCase):
             """,
         )
         with patch.dict(os.environ, {"RIFF_CLAUDE_BIN": fake}):
-            result = ClaudeAdapter().start(self.turn("claude", suffix="claude-limit"))
+            result = ClaudeAdapter().execute(self.turn("claude", suffix="claude-limit"))
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "rate_limit")
         self.assertIn("session limit", result.error)
@@ -167,13 +169,33 @@ class AdapterProcessTests(unittest.TestCase):
                               'session_id': args[args.index('--session-id') + 1]}))
             """,
         )
-        script = str(Path(__file__).resolve().parent.parent / "skills" / "riff" / "scripts" / "riff.py")
+        script = str(
+            Path(__file__).resolve().parent.parent
+            / "skills"
+            / "riff"
+            / "scripts"
+            / "riff.py"
+        )
         request = self.root / "request.json"
-        request.write_text(json.dumps({
-            "version": 1, "mode": "consult", "task": "Review.", "origin_harness": "codex",
-            "participants": [{"id": "claude-a", "harness": "claude", "cwd": str(self.cwd), "tools": "read"}],
-            "driver_prediction": "Nothing surprising.",
-        }))
+        request.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "mode": "consult",
+                    "task": "Review.",
+                    "origin_harness": "codex",
+                    "participants": [
+                        {
+                            "id": "claude-a",
+                            "harness": "claude",
+                            "cwd": str(self.cwd),
+                            "tools": "read",
+                        }
+                    ],
+                    "driver_prediction": "Nothing surprising.",
+                }
+            )
+        )
         env = {**os.environ, "RIFF_CLAUDE_BIN": fake}
         state = str(self.root / "state")
         # Exercise upgrades from directories created with a permissive umask.
@@ -183,27 +205,53 @@ class AdapterProcessTests(unittest.TestCase):
             directory.chmod(0o755)
 
         def riff(*args):
-            done = subprocess.run([sys.executable, script, "--state-dir", state, *args],
-                                  capture_output=True, text=True, env=env, timeout=60, check=False)
+            done = subprocess.run(
+                [sys.executable, script, "--state-dir", state, *args],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=60,
+                check=False,
+            )
             self.assertEqual(done.returncode, 0, done.stderr)
             return json.loads(done.stdout)
 
         invalid = subprocess.run(
-            [sys.executable, script, "--state-dir", state, "run", "--request", str(request),
-             "--run-id", "../escaped", "--detach"],
-            capture_output=True, text=True, env=env, timeout=10, check=False,
+            [
+                sys.executable,
+                script,
+                "--state-dir",
+                state,
+                "run",
+                "--request",
+                str(request),
+                "--run-id",
+                "../escaped",
+                "--detach",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+            check=False,
         )
         self.assertNotEqual(invalid.returncode, 0)
         self.assertFalse((Path(state) / "escaped.request.json").exists())
 
         detached = riff("run", "--request", str(request), "--detach")
-        self.assertEqual(detached["status"], "running")
+        self.assertEqual(detached["status"], "starting")
         waited = riff("wait", "--run-id", detached["run_id"], "--timeout-seconds", "30")
         self.assertEqual(waited["status"], "settled")
-        self.assertEqual(Path(waited["participants"][0]["artifact_file"]).read_text(), "detached artifact")
+        self.assertEqual(
+            Path(waited["participants"][0]["artifact_file"]).read_text(),
+            "detached artifact",
+        )
         if os.name == "posix":
-            for name in ("runs", "detached"):
-                self.assertEqual((Path(state) / name).stat().st_mode & 0o077, 0)
+            for folder in (
+                Path(state) / "runs",
+                Path(state) / "runs" / detached["run_id"] / "launch",
+            ):
+                self.assertEqual(folder.stat().st_mode & 0o077, 0)
 
     def test_codex_auth_failure_is_classified(self) -> None:
         fake = self.executable(
@@ -218,11 +266,12 @@ class AdapterProcessTests(unittest.TestCase):
             """,
         )
         with patch.dict(os.environ, {"RIFF_CODEX_BIN": fake}):
-            result = CodexAdapter().start(self.turn("codex", suffix="codex-auth"))
+            result = CodexAdapter().execute(self.turn("codex", suffix="codex-auth"))
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "auth")
         self.assertEqual(
-            result.error, "unexpected status 401 Unauthorized: Incorrect API key provided"
+            result.error,
+            "unexpected status 401 Unauthorized: Incorrect API key provided",
         )
 
     def test_codex_start_and_reply_parse_jsonl_and_artifact(self) -> None:
@@ -241,8 +290,8 @@ class AdapterProcessTests(unittest.TestCase):
         )
         adapter = CodexAdapter()
         with patch.dict(os.environ, {"RIFF_CODEX_BIN": fake}):
-            started = adapter.start(self.turn("codex", suffix="codex-start"))
-            replied = adapter.reply(
+            started = adapter.execute(self.turn("codex", suffix="codex-start"))
+            replied = adapter.execute(
                 self.turn(
                     "codex",
                     suffix="codex-reply",
@@ -266,7 +315,9 @@ class AdapterProcessTests(unittest.TestCase):
             """,
         )
         with patch.dict(os.environ, {"RIFF_CODEX_BIN": incomplete}):
-            result = CodexAdapter().start(self.turn("codex", suffix="codex-incomplete"))
+            result = CodexAdapter().execute(
+                self.turn("codex", suffix="codex-incomplete")
+            )
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "transport")
         self.assertEqual(result.native_session_id, "incomplete-thread")
@@ -285,10 +336,12 @@ class AdapterProcessTests(unittest.TestCase):
         turn = self.turn("codex", suffix="codex-timeout")
         turn = TurnRequest(**{**turn.__dict__, "timeout_seconds": 1})
         with patch.dict(os.environ, {"RIFF_CODEX_BIN": timed}):
-            result = CodexAdapter().start(turn)
+            result = CodexAdapter().execute(turn)
         self.assertFalse(result.ok)
         self.assertEqual(result.error_type, "timeout")
         self.assertEqual(result.native_session_id, "timed-thread")
+        self.assertEqual(result.provider, "openai")
+        self.assertEqual(result.authority_enforcement, "native")
 
     def test_pi_waits_for_agent_settled_and_resumes_session_file(self) -> None:
         fake = self.executable(
@@ -317,8 +370,8 @@ class AdapterProcessTests(unittest.TestCase):
         )
         adapter = PiAdapter()
         with patch.dict(os.environ, {"RIFF_PI_BIN": fake}):
-            started = adapter.start(self.turn("pi", suffix="pi-start"))
-            replied = adapter.reply(
+            started = adapter.execute(self.turn("pi", suffix="pi-start"))
+            replied = adapter.execute(
                 self.turn(
                     "pi",
                     suffix="pi-reply",
@@ -352,10 +405,12 @@ class AdapterProcessTests(unittest.TestCase):
             """,
         )
         with patch.dict(os.environ, {"RIFF_PI_BIN": fake}):
-            result = PiAdapter().start(self.turn("pi", suffix="pi-noisy"))
+            result = PiAdapter().execute(self.turn("pi", suffix="pi-noisy"))
         self.assertTrue(result.ok)
 
-    def test_pi_prompt_that_starts_no_run_fails_without_waiting_for_timeout(self) -> None:
+    def test_pi_prompt_that_starts_no_run_fails_without_waiting_for_timeout(
+        self,
+    ) -> None:
         # Pi stays alive after either response, and agent_settled never follows.
         fake = self.executable(
             "idle-pi",
@@ -373,12 +428,77 @@ class AdapterProcessTests(unittest.TestCase):
             "handled": {"success": True, "data": {"disposition": "handled"}},
         }
         for name, response in responses.items():
-            with self.subTest(name), patch.dict(
-                os.environ, {"RIFF_PI_BIN": fake, "FAKE_PI_RESPONSE": json.dumps(response)}
+            with (
+                self.subTest(name),
+                patch.dict(
+                    os.environ,
+                    {"RIFF_PI_BIN": fake, "FAKE_PI_RESPONSE": json.dumps(response)},
+                ),
             ):
-                result = PiAdapter().start(self.turn("pi", suffix=f"pi-{name}"))
+                result = PiAdapter().execute(self.turn("pi", suffix=f"pi-{name}"))
                 self.assertEqual(result.error_type, "transport")
                 self.assertLess(result.elapsed_ms, 3000)  # the turn timeout is 5 s
+
+    def test_codex_and_hermes_publish_identity_with_portable_streaming(self) -> None:
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from functools import partial
+        from scripts.riff_core.pipe_io import PipeIO
+
+        for harness, adapter in (
+            ("codex", CodexAdapter()),
+            ("hermes", HermesAdapter()),
+        ):
+            with self.subTest(harness=harness):
+                release = self.root / f"release-{harness}"
+                fake = self.executable(
+                    harness,
+                    """
+                    import json, pathlib, sys, time
+                    args = sys.argv[1:]
+                    if __HARNESS__ == 'codex':
+                        sys.stdin.read()
+                        print(json.dumps({'type': 'thread.started', 'thread_id': 'early-session'}), flush=True)
+                    else:
+                        print('session_id: early-session', file=sys.stderr, flush=True)
+                    while not pathlib.Path(__RELEASE__).exists():
+                        time.sleep(0.01)
+                    if __HARNESS__ == 'codex':
+                        pathlib.Path(args[args.index('-o') + 1]).write_text('final artifact')
+                        print(json.dumps({'type': 'turn.completed'}))
+                    else:
+                        print('final artifact')
+                """.replace("__HARNESS__", repr(harness)).replace(
+                        "__RELEASE__", repr(str(release))
+                    ),
+                )
+                observed, published = [], threading.Event()
+
+                def observe(session, ref):
+                    observed.append(session)
+                    published.set()
+
+                turn = self.turn(harness, suffix=f"{harness}-early")
+                turn = TurnRequest(**{**turn.__dict__, "observe_session": observe})
+                with (
+                    patch.dict(os.environ, {f"RIFF_{harness.upper()}_BIN": fake}),
+                    patch(
+                        "scripts.riff_core.process.PipeIO",
+                        partial(PipeIO, threaded=True),
+                    ),
+                ):
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(adapter.execute, turn)
+                        try:
+                            self.assertTrue(published.wait(3))
+                            self.assertFalse(future.done())
+                            self.assertEqual(observed, ["early-session"])
+                            self.assertIn(
+                                "early-session", Path(turn.log_path).read_text()
+                            )
+                        finally:
+                            release.touch()
+                        self.assertTrue(future.result(timeout=3).ok)
 
     def test_hermes_start_and_reply_parse_stderr_session(self) -> None:
         fake = self.executable(
@@ -393,8 +513,8 @@ class AdapterProcessTests(unittest.TestCase):
         )
         adapter = HermesAdapter()
         with patch.dict(os.environ, {"RIFF_HERMES_BIN": fake}):
-            started = adapter.start(self.turn("hermes", suffix="hermes-start"))
-            replied = adapter.reply(
+            started = adapter.execute(self.turn("hermes", suffix="hermes-start"))
+            replied = adapter.execute(
                 self.turn(
                     "hermes",
                     suffix="hermes-reply",
@@ -405,6 +525,24 @@ class AdapterProcessTests(unittest.TestCase):
         self.assertTrue(started.ok)
         self.assertTrue(replied.ok)
         self.assertEqual(replied.native_session_id, "hermes-session")
+
+        slow = self.executable(
+            "slow-hermes",
+            """
+            import sys, time
+            print('session_id: timed-hermes-session', file=sys.stderr, flush=True)
+            time.sleep(5)
+            """,
+        )
+        turn = self.turn("hermes", suffix="hermes-timeout")
+        turn = TurnRequest(**{**turn.__dict__, "timeout_seconds": 1})
+        with patch.dict(os.environ, {"RIFF_HERMES_BIN": slow}):
+            timed = adapter.execute(turn)
+        self.assertFalse(timed.ok)
+        self.assertEqual(timed.error_type, "timeout")
+        self.assertEqual(timed.native_session_id, "timed-hermes-session")
+        self.assertIsNone(timed.provider)
+        self.assertEqual(timed.authority_enforcement, "prompt")
 
 
 if __name__ == "__main__":

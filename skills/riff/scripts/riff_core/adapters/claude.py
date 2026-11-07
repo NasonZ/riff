@@ -9,15 +9,15 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from ..process import child_environment, run_process
 from ..models import SettledTurn, TurnRequest, ValidationError
 from .base import (
     PEER_SYSTEM_NOTE,
     HarnessAdapter,
-    child_environment,
     executable,
+    failed_turn,
     require_string_param,
     require_supported_params,
-    run_process,
 )
 
 
@@ -28,7 +28,9 @@ class ClaudeAdapter(HarnessAdapter):
         path = os.environ.get("RIFF_CLAUDE_BIN") or "claude"
         return {
             "harness": self.name,
-            "available": bool(executable(path, "RIFF_CLAUDE_BIN")) if _which(path) else False,
+            "available": bool(executable(path, "RIFF_CLAUDE_BIN"))
+            if _which(path)
+            else False,
             "persistent_sessions": True,
             "tool_scopes": ["none", "read", "read+web", "write"],
             "parameters": ["effort", "permission_mode", "add_dirs", "allowed_commands"],
@@ -62,7 +64,9 @@ class ClaudeAdapter(HarnessAdapter):
             )
         for directory in _string_list_param(params, "add_dirs"):
             if not Path(directory).expanduser().is_dir():
-                raise ValidationError(f"claude param add_dirs entry does not exist: {directory}")
+                raise ValidationError(
+                    f"claude param add_dirs entry does not exist: {directory}"
+                )
         commands = _string_list_param(params, "allowed_commands")
         if commands and turn.participant.tools != "write":
             raise ValidationError(
@@ -129,7 +133,10 @@ class ClaudeAdapter(HarnessAdapter):
             commands = _string_list_param(turn.participant.params, "allowed_commands")
             if commands:
                 command.extend(
-                    ["--allowedTools", ",".join(f"Bash({prefix}:*)" for prefix in commands)]
+                    [
+                        "--allowedTools",
+                        ",".join(f"Bash({prefix}:*)" for prefix in commands),
+                    ]
                 )
         for directory in _string_list_param(turn.participant.params, "add_dirs"):
             command.extend(["--add-dir", str(Path(directory).expanduser().resolve())])
@@ -153,24 +160,26 @@ class ClaudeAdapter(HarnessAdapter):
             environment["CLAUDE_CODE_USE_FOUNDRY"] = "1"
         return command, environment, turn.prompt
 
-    def start(self, turn: TurnRequest) -> SettledTurn:
-        return self._run(turn)
-
-    def reply(self, turn: TurnRequest) -> SettledTurn:
-        return self._run(turn)
-
-    def _run(self, turn: TurnRequest) -> SettledTurn:
+    def execute(self, turn: TurnRequest) -> SettledTurn:
         command, environment, prompt = self.build_command(turn)
+        if turn.observe_session:
+            turn.observe_session(
+                turn.native_session_id or _session_id_from_command(command),
+                turn.native_session_ref,
+            )
         completed, elapsed_ms, timeout_error = run_process(
             command, turn, input_text=prompt, environment=environment
         )
         if timeout_error:
-            return _failed(
+            return failed_turn(
                 turn,
                 elapsed_ms,
                 "timeout",
                 timeout_error,
-                native_session_id=turn.native_session_id or _session_id_from_command(command),
+                adapter_metadata=completed.metadata,
+                provider=turn.participant.provider,
+                native_session_id=turn.native_session_id
+                or _session_id_from_command(command),
             )
         assert completed is not None
         payload: dict[str, Any] = {}
@@ -209,8 +218,11 @@ class ClaudeAdapter(HarnessAdapter):
             status="settled" if not error else "failed",
             artifact_file=turn.artifact_path,
             log_file=turn.log_path,
-            native_session_id=payload.get("session_id") or (
-                turn.native_session_id if turn.is_reply else _session_id_from_command(command)
+            native_session_id=payload.get("session_id")
+            or (
+                turn.native_session_id
+                if turn.is_reply
+                else _session_id_from_command(command)
             ),
             model=payload.get("model") or turn.participant.model,
             provider=turn.participant.provider,
@@ -224,6 +236,7 @@ class ClaudeAdapter(HarnessAdapter):
                 else "native-tool-allowlist"
             ),
             adapter_metadata={
+                **completed.metadata,
                 "subtype": payload.get("subtype"),
                 "num_turns": payload.get("num_turns"),
                 "permission_denials": payload.get("permission_denials") or [],
@@ -237,8 +250,12 @@ def _string_list_param(params: dict[str, Any], name: str) -> list[str]:
     value = params.get(name)
     if value is None:
         return []
-    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
-        raise ValidationError(f"claude param {name} must be a list of non-empty strings")
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        raise ValidationError(
+            f"claude param {name} must be a list of non-empty strings"
+        )
     return [item.strip() for item in value]
 
 
@@ -264,27 +281,10 @@ def _session_id_from_command(command: list[str]) -> str | None:
 def _which(value: str) -> str | None:
     import shutil
 
-    return shutil.which(value) if os.sep not in value else value if Path(value).is_file() else None
-
-
-def _failed(
-    turn: TurnRequest,
-    elapsed_ms: int,
-    error_type: str,
-    error: str,
-    *,
-    native_session_id: str | None = None,
-) -> SettledTurn:
-    return SettledTurn(
-        participant_id=turn.participant.id,
-        harness="claude",
-        status="failed",
-        artifact_file=turn.artifact_path,
-        log_file=turn.log_path,
-        native_session_id=native_session_id or turn.native_session_id,
-        model=turn.participant.model,
-        provider=turn.participant.provider,
-        elapsed_ms=elapsed_ms,
-        error_type=error_type,
-        error=error,
+    return (
+        shutil.which(value)
+        if os.sep not in value
+        else value
+        if Path(value).is_file()
+        else None
     )

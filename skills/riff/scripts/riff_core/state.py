@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .models import ValidationError
+
 SECRET_KEY = re.compile(
     r"(?:api[_-]?key|secret|password|authorization|bearer|"
     r"(?:access|refresh|oauth|auth)[_-]?token)",
@@ -51,6 +53,14 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
+        if os.name == "posix":
+            directory_fd = os.open(
+                path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            )
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -97,7 +107,6 @@ class RunStore:
     def __init__(self, root: Path | None = None) -> None:
         self.root = (root or default_state_root()).expanduser().resolve()
         self.runs = self.root / "runs"
-        private_directory(self.runs)
 
     def run_dir(self, run_id: str) -> Path:
         try:
@@ -116,10 +125,14 @@ class RunStore:
     @contextmanager
     def participant_lock(self, run_id: str, participant_id: str):
         _validate_participant_id(participant_id)
-        with _file_lock(self.run_dir(run_id) / "participants" / f".{participant_id}.lock"):
+        with _file_lock(
+            self.run_dir(run_id) / "participants" / f".{participant_id}.lock",
+            blocking=False,
+        ):
             yield
 
     def create(self, run_id: str, manifest: dict[str, Any]) -> Path:
+        private_directory(self.runs)
         directory = self.run_dir(run_id)
         try:
             directory.mkdir()
@@ -127,39 +140,48 @@ class RunStore:
             raise ValueError(f"run already exists: {run_id}") from error
         for child in ("artifacts", "logs", "turns", "participants"):
             (directory / child).mkdir()
-        self.write_manifest(run_id, manifest)
+        self.write_control(run_id, manifest)
         return directory
 
     def manifest_path(self, run_id: str) -> Path:
         return self.run_dir(run_id) / "run.json"
 
-    def read_manifest(self, run_id: str) -> dict[str, Any]:
+    def read_control(self, run_id: str) -> dict[str, Any]:
         path = self.manifest_path(run_id)
         if not path.is_file():
-            raise ValueError(f"unknown run id: {run_id}")
-        return read_json(path)
+            raise ValidationError(f"unknown run id: {run_id}")
+        value = read_json(path)
+        if value.get("schema_version") != 2 or value.get("history"):
+            raise ValidationError(
+                "unsupported run history; start a new run, or inspect this record "
+                "with the version that created it. Existing files are unchanged."
+            )
+        required = {
+            "run_id": str,
+            "participants": list,
+            "participant_specs": dict,
+            "attempts": list,
+            "dispatch": dict,
+            "assessments": list,
+        }
+        if any(not isinstance(value.get(key), kind) for key, kind in required.items()):
+            raise ValueError("invalid run control")
+        return value
 
-    def write_manifest(self, run_id: str, manifest: dict[str, Any]) -> None:
-        atomic_json(self.manifest_path(run_id), redact(manifest))
+    def write_control(self, run_id: str, control: dict[str, Any]) -> None:
+        atomic_json(self.manifest_path(run_id), redact_control(control))
 
-    def participant_path(self, run_id: str, participant_id: str) -> Path:
-        _validate_participant_id(participant_id)
-        return self.run_dir(run_id) / "participants" / f"{participant_id}.json"
-
-    def read_participant(self, run_id: str, participant_id: str) -> dict[str, Any]:
-        path = self.participant_path(run_id, participant_id)
-        if not path.is_file():
-            raise ValueError(f"participant {participant_id!r} is not in run {run_id}")
-        return read_json(path)
-
-    def write_participant(
-        self, run_id: str, participant_id: str, value: dict[str, Any]
-    ) -> None:
-        atomic_json(self.participant_path(run_id, participant_id), redact(value))
+    @contextmanager
+    def mutation(self, run_id: str):
+        with self.run_lock(run_id):
+            control = self.read_control(run_id)
+            yield control
+            control["updated_at"] = utc_now()
+            self.write_control(run_id, control)
 
     def write_turn(self, run_id: str, turn_id: str, value: dict[str, Any]) -> Path:
         path = self.run_dir(run_id) / "turns" / f"{turn_id}.json"
-        atomic_json(path, redact(value))
+        atomic_json(path, redact_record(value))
         return path
 
     def artifact_path(self, run_id: str, turn_id: str) -> Path:
@@ -176,7 +198,7 @@ class RunStore:
 
 
 @contextmanager
-def _file_lock(path: Path):
+def _file_lock(path: Path, *, blocking: bool = True):
     """Hold an inter-process advisory lock for a state mutation."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+") as stream:
@@ -190,14 +212,23 @@ def _file_lock(path: Path):
                 stream.write("\0")
                 stream.flush()
             stream.seek(0)
-            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+            msvcrt.locking(
+                stream.fileno(), (msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK), 1
+            )
             try:
                 yield
             finally:
                 stream.seek(0)
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
         else:
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            try:
+                fcntl.flock(
+                    stream.fileno(), fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+                )
+            except BlockingIOError as error:
+                raise ValidationError(
+                    "participant is busy; inspect progress and wait"
+                ) from error
             try:
                 yield
             finally:
@@ -207,3 +238,28 @@ def _file_lock(path: Path):
 def _validate_participant_id(participant_id: str) -> None:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", participant_id):
         raise ValueError(f"invalid participant id: {participant_id!r}")
+
+
+def redact_record(value: dict[str, Any]) -> dict[str, Any]:
+    import copy
+
+    result = copy.deepcopy(value)
+    execution = result.get("execution", result)
+    for key in ("usage", "adapter_metadata"):
+        if key in execution:
+            execution[key] = redact(execution[key])
+    return result
+
+
+def redact_control(value: dict[str, Any]) -> dict[str, Any]:
+    import copy
+
+    result = copy.deepcopy(value)
+    for participant in result.get("participant_specs", {}).values():
+        spec = participant.get("spec") or {}
+        if "params" in spec:
+            spec["params"] = redact(spec["params"])
+    for attempt in result.get("attempts", []):
+        if attempt.get("outcome"):
+            attempt["outcome"] = redact_record(attempt["outcome"])
+    return result

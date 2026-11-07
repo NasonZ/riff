@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import uuid
 from pathlib import Path
 from typing import Any
 
 from riff_core import Coordinator, RunRequest, ValidationError
-from riff_core.state import RunStore, private_directory
+from riff_core.state import RunStore
 
 
 def _read_json(path: str) -> dict[str, Any]:
@@ -33,7 +32,9 @@ def _read_prompt(args: argparse.Namespace) -> str:
     elif not sys.stdin.isatty():
         prompt = sys.stdin.read()
     else:
-        raise ValidationError("provide --prompt, --prompt-file, or prompt text on stdin")
+        raise ValidationError(
+            "provide --prompt, --prompt-file, or prompt text on stdin"
+        )
     if not prompt.strip():
         raise ValidationError("prompt must not be empty")
     return prompt
@@ -67,41 +68,15 @@ def command_run(args: argparse.Namespace) -> dict[str, Any]:
     return coordinator.run(request, run_id=run_id)
 
 
-def _detach(coordinator: Coordinator, request: RunRequest, run_id: str) -> dict[str, Any]:
-    """Start the run in its own process group and return at once; follow it with wait."""
-    coordinator.store.run_dir(run_id)  # Validate before using the ID in any filename.
-    folder = coordinator.store.root / "detached"
-    private_directory(folder)
-    request_file = folder / f"{run_id}.request.json"
-    request_file.write_text(json.dumps(request.to_dict()))
-    command = [
-        sys.executable,
-        str(Path(__file__).resolve()),
-        "--state-dir",
-        str(coordinator.store.root),
-        "run",
-        "--request",
-        str(request_file),
-        "--run-id",
-        run_id,
-    ]
-    with (folder / f"{run_id}.out").open("w") as out, (folder / f"{run_id}.err").open("w") as err:
-        process = subprocess.Popen(
-            command, stdout=out, stderr=err, stdin=subprocess.DEVNULL, start_new_session=True
-        )
-    (folder / f"{run_id}.pid").write_text(str(process.pid))
-    return {
-        "ok": True,
-        "run_id": run_id,
-        "status": "running",
-        "warnings": coordinator.warnings(request),
-        "next_steps": [
-            (
-                f"Follow it with {coordinator.script_invocation()} wait --run-id {run_id} "
-                "(returns within about nine minutes; call again while it reports running)."
-            )
-        ],
-    }
+def _detach(
+    coordinator: Coordinator, request: RunRequest, run_id: str
+) -> dict[str, Any]:
+    return coordinator.detach(request, run_id)
+
+
+def command_execute(args):
+    request = RunRequest.from_dict(_read_json(args.request))
+    return _coordinator(args).execute_detached(request, args.run_id, args.launch_token)
 
 
 def command_validate(args: argparse.Namespace) -> dict[str, Any]:
@@ -177,7 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="start a consult, discussion, or delegation")
     accept_state_dir(run)
-    run.add_argument("--request", required=True, help="request JSON file, or - for stdin")
+    run.add_argument(
+        "--request", required=True, help="request JSON file, or - for stdin"
+    )
     run.add_argument("--run-id", help="optional preallocated canonical UUID")
     run.add_argument(
         "--detach",
@@ -185,6 +162,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="start the run in the background and return its id; follow with wait",
     )
     run.set_defaults(handler=command_run)
+
+    execute = commands.add_parser("_execute", help=argparse.SUPPRESS)
+    accept_state_dir(execute)
+    execute.add_argument("--request", required=True)
+    execute.add_argument("--run-id", required=True)
+    execute.add_argument("--launch-token", required=True)
+    execute.set_defaults(handler=command_execute)
 
     wait = commands.add_parser("wait", help="block until a run settles, within a bound")
     accept_state_dir(wait)
@@ -194,10 +178,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = commands.add_parser("validate", help="validate and normalize a request")
     accept_state_dir(validate)
-    validate.add_argument("--request", required=True, help="request JSON file, or - for stdin")
+    validate.add_argument(
+        "--request", required=True, help="request JSON file, or - for stdin"
+    )
     validate.set_defaults(handler=command_validate)
 
-    reply = commands.add_parser("reply", help="continue one participant's native session")
+    reply = commands.add_parser(
+        "reply", help="continue one participant's native session"
+    )
     accept_state_dir(reply)
     reply.add_argument("--run-id", required=True)
     reply.add_argument("--participant", required=True)
@@ -216,7 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reply.set_defaults(handler=command_reply)
 
-    status = commands.add_parser("status", help="show a run and participant session state")
+    status = commands.add_parser(
+        "status", help="show a run and participant session state"
+    )
     accept_state_dir(status)
     status.add_argument("--run-id", required=True)
     status.set_defaults(handler=command_status)
@@ -240,7 +230,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     progress.set_defaults(handler=command_progress)
 
-    verify = commands.add_parser("verify", help="record driver verification and integration")
+    verify = commands.add_parser(
+        "verify", help="record driver verification and integration"
+    )
     accept_state_dir(verify)
     verify.add_argument("--run-id", required=True)
     verify.add_argument("--verifier", required=True)
@@ -272,7 +264,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("--integrated", action="store_true")
     verify.add_argument(
-        "--note", help="contribution, adoption or rejection rationale, and remaining uncertainty"
+        "--note",
+        help="contribution, adoption or rejection rationale, and remaining uncertainty",
     )
     verify.set_defaults(handler=command_verify)
     return parser
@@ -283,7 +276,13 @@ def main() -> int:
     args = parser.parse_args()
     try:
         result = args.handler(args)
-    except (ValidationError, RuntimeError, OSError, ValueError, json.JSONDecodeError) as error:
+    except (
+        ValidationError,
+        RuntimeError,
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as error:
         print(json.dumps({"ok": False, "error": str(error)}), file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=False))
