@@ -242,9 +242,35 @@ python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
 `--run` executes commands and derives the result from exit codes unless an explicit
 result is supplied. It rejects an explicit `passed` that contradicts a failing
 command. `--integrated` is the driver's report of an applied change or adopted
-decision, not a synonym for receiving an answer. Re-verifying preserves the prior
-record. Keep failures, corrections, and reasons for rejection: they are evidence
-for future evaluation as well as context for the current user.
+decision, not a synonym for receiving an answer.
+
+Each verification record identifies the latest successful participant turns and
+artifact hashes available when assessment starts. Re-verifying preserves the prior
+record and writes check logs in a separate directory, so a later command does not
+replace earlier evidence. Status compares this coverage with the latest turns: a
+passing record for an earlier artifact does not certify a new reply. A failed later
+attempt remains visible alongside any assessment of the earlier artifact. Older
+records without coverage information have unknown scope; check logs overwritten by
+older versions cannot be recovered from their recorded hashes.
+
+The returned `verification_scope` reports each participant as `unassessed`,
+`covered`, `uncovered`, `failed`, `running`, or `unknown`. `covered_turns`
+identifies any earlier successful artifact included in the current assessment,
+including after a failed attempt. That assessment may be `not_performed`; earlier
+check results remain in `verification_history`. The scope's `current` field says
+whether the assessment matches the latest attempts; it does not say that checks
+passed or that every participant succeeded. Recording a failure makes the assessment
+current without clearing that failure. A current `not_performed` record still means
+no checks were performed. A new run is unassessed with `current: false`;
+`current: null` indicates unknown scope, including legacy assessments and unreadable
+turn records.
+
+Start verification only once the run has settled. If a reply overlaps executed
+checks, the record stays tied to its starting artifacts and its coverage is no
+longer current. This is not isolation of the working directory: another process
+can change files while a command runs. Review the relevant diff and environment
+as well as the exit code. Keep failures, corrections, and reasons for rejection:
+they are evidence for future evaluation as well as context for the current user.
 
 ## Stopping
 

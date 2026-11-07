@@ -24,7 +24,7 @@ from .models import (
     ValidationError,
     request_warnings,
 )
-from .state import RunStore, default_state_root, sha256_file, sha256_text, utc_now
+from .state import RunStore, default_state_root, read_json, sha256_file, sha256_text, utc_now
 
 RIFF_SCRIPT = Path(__file__).resolve().parent.parent / "riff.py"
 UNVERIFIED_LOOKBACK_SECONDS = 7 * 24 * 3600
@@ -292,12 +292,27 @@ class Coordinator:
         return self._public_result(run_id, [result])
 
     def status(self, run_id: str) -> dict[str, Any]:
+        try:
+            with self.store.run_lock(run_id):
+                return self._read_status(run_id)
+        except OSError:
+            # Read-only copies/sandboxes cannot open the lock for writing. Each
+            # JSON file is atomic, though this fallback is not a multi-file snapshot.
+            result = self._read_status(run_id)
+            result["snapshot_consistent"] = False
+            return result
+
+    def _read_status(self, run_id: str) -> dict[str, Any]:
         manifest = self.store.read_manifest(run_id)
         participants = {
             participant_id: self.store.read_participant(run_id, participant_id)
             for participant_id in manifest["participants"]
         }
-        return {"manifest": manifest, "participant_state": participants}
+        return {
+            "manifest": manifest, "participant_state": participants,
+            "verification_scope": self._verification_scope(run_id, manifest),
+            "snapshot_consistent": True,
+        }
 
     def wait(
         self,
@@ -460,9 +475,16 @@ class Coordinator:
             raise ValidationError(f"{result} verification requires at least one check")
         if not 1 <= command_timeout_seconds <= 86400:
             raise ValidationError("command timeout must be between 1 and 86400 seconds")
-        manifest = self.store.read_manifest(run_id)
-        if manifest.get("status") != "settled":
-            raise ValidationError("verification requires a settled run")
+        with self.store.run_lock(run_id):
+            manifest = self.store.read_manifest(run_id)
+            snapshot = self._assessment_snapshot(run_id, manifest)
+            if any(item["status"] == "unknown" for item in snapshot.values()):
+                raise ValidationError("verification requires readable participant turn records")
+            if manifest.get("status") != "settled" or any(
+                item["status"] == "running" for item in snapshot.values()
+            ):
+                raise ValidationError("verification requires a settled run")
+        assessment_id = uuid.uuid4().hex
         if commands:
             if cwd is None:
                 first = self.store.read_participant(run_id, manifest["participants"][0])
@@ -470,10 +492,12 @@ class Coordinator:
             cwd = str(Path(cwd).expanduser().resolve())
             if not Path(cwd).is_dir():
                 raise ValidationError(f"verification cwd does not exist: {cwd}")
+        checkout_before = _checkout_fingerprint(cwd) if commands else None
         executed = [
-            self._execute_check(run_id, index, command, cwd, command_timeout_seconds)
+            self._execute_check(run_id, assessment_id, index, command, cwd, command_timeout_seconds)
             for index, command in enumerate(commands, start=1)
         ]
+        checkout_after = _checkout_fingerprint(cwd) if commands else None
         derived = _derive_verification(executed)
         if result is None:
             result = derived
@@ -490,6 +514,12 @@ class Coordinator:
             if prior.get("verified_at"):
                 manifest.setdefault("verification_history", []).append(prior)
             manifest["verification"] = {
+                "id": assessment_id,
+                "covers": {key: value["successful_turn"] for key, value in snapshot.items()},
+                "snapshot": snapshot,
+                "changed_during_checks": snapshot != self._assessment_snapshot(run_id, manifest),
+                "checkout_before": checkout_before,
+                "checkout_after": checkout_after,
                 "performed": result != "not_performed",
                 "verifier": verifier,
                 "checks": recorded,
@@ -505,14 +535,83 @@ class Coordinator:
             "ok": True,
             "run_id": run_id,
             "result": result,
+            "verification_scope": self._verification_scope(run_id, manifest),
             "checks": recorded,
             "manifest_file": str(self.store.manifest_path(run_id)),
         }
 
+    def _assessment_snapshot(self, run_id: str, manifest: dict[str, Any]) -> dict[str, Any]:
+        """Turn identity, not a claim that checks cover every participant or file."""
+        snapshot = {}
+        for participant_id in manifest["participants"]:
+            state = self.store.read_participant(run_id, participant_id)
+            paths = state.get("turns", [])
+            successful = None
+            status = state["status"]
+            try:
+                for path in reversed(paths):
+                    turn = read_json(Path(path))
+                    if turn["execution"]["status"] == "settled":
+                        successful = {"turn_id": turn["turn_id"],
+                                      "artifact_sha256": turn["artifact_sha256"]}
+                        break
+            except (OSError, ValueError, KeyError, TypeError):
+                status = "unknown"
+            snapshot[participant_id] = {
+                "status": status,
+                "latest_turn": paths[-1] if paths else None,
+                "active_turn": (state.get("active_turn") or {}).get("turn_id"),
+                "successful_turn": successful,
+            }
+        return snapshot
+
+    def _verification_scope(self, run_id: str, manifest: dict[str, Any]) -> dict[str, Any]:
+        record = manifest.get("verification") or {}
+        covers = record.get("covers")
+        snapshot = self._assessment_snapshot(run_id, manifest)
+        participants = {}
+        covered_turns = {}
+        for key, value in snapshot.items():
+            covered = (covers or {}).get(key)
+            covered_turns[key] = (
+                covered if covered is not None and covered == value["successful_turn"] else None
+            )
+            if value["status"] in {"running", "unknown"}:
+                scope = value["status"]
+            elif value["status"] != "settled":
+                scope = "failed"
+            elif not record.get("verified_at"):
+                scope = "unassessed"
+            elif covers is None:
+                scope = "unknown"
+            elif covered_turns[key] is not None:
+                scope = "covered"
+            else:
+                scope = "uncovered"
+            participants[key] = scope
+        changed = record.get("changed_during_checks", False)
+        if any(value["status"] == "unknown" for value in snapshot.values()):
+            current = None
+        elif not record.get("verified_at"):
+            current = False
+        elif covers is None or "snapshot" not in record:
+            current = None
+        else:
+            # A fresh assessment can acknowledge a failure without certifying it.
+            # A later failed attempt still invalidates the earlier assessment.
+            current = not changed and snapshot == record["snapshot"]
+        return {
+            "participants": participants,
+            "covered_turns": covered_turns,
+            "current": current,
+            "changed_during_checks": changed,
+        }
+
     def _execute_check(
-        self, run_id: str, index: int, command: str, cwd: str, timeout_seconds: int
+        self, run_id: str, assessment_id: str, index: int, command: str, cwd: str,
+        timeout_seconds: int,
     ) -> dict[str, Any]:
-        output_file = self.store.run_dir(run_id) / "verification" / f"check-{index:02d}.log"
+        output_file = self.store.run_dir(run_id) / "verification" / assessment_id / f"check-{index:02d}.log"
         output_file.parent.mkdir(parents=True, exist_ok=True)
         started = time.monotonic()
         try:
@@ -714,8 +813,8 @@ class Coordinator:
                 participant, turn.native_session_id, turn.native_session_ref
             ),
         }
-        self.store.write_participant(run_id, participant.id, state)
         with self.store.run_lock(run_id):
+            self.store.write_participant(run_id, participant.id, state)
             manifest = self.store.read_manifest(run_id)
             manifest["status"] = "running"
             manifest["updated_at"] = utc_now()
@@ -858,17 +957,18 @@ class Coordinator:
             "artifact_sha256": sha256_file(artifact_path),
             "recorded_at": utc_now(),
         }
-        turn_file = self.store.write_turn(run_id, turn.turn_id, turn_record)
-        state["native_session_id"] = result.native_session_id
-        state["native_session_ref"] = result.native_session_ref
-        previous_turns = int(state.get("turn_count", 0))
-        state["turn_count"] = previous_turns + 1
-        state["settled_turns"] = int(state.get("settled_turns", previous_turns)) + int(result.ok)
-        state["timeout_seconds"] = turn.timeout_seconds
-        state["status"] = result.status
-        state.pop("active_turn", None)
-        state.setdefault("turns", []).append(str(turn_file))
-        self.store.write_participant(run_id, participant.id, state)
+        with self.store.run_lock(run_id):
+            turn_file = self.store.write_turn(run_id, turn.turn_id, turn_record)
+            state["native_session_id"] = result.native_session_id
+            state["native_session_ref"] = result.native_session_ref
+            previous_turns = int(state.get("turn_count", 0))
+            state["turn_count"] = previous_turns + 1
+            state["settled_turns"] = int(state.get("settled_turns", previous_turns)) + int(result.ok)
+            state["timeout_seconds"] = turn.timeout_seconds
+            state["status"] = result.status
+            state.pop("active_turn", None)
+            state.setdefault("turns", []).append(str(turn_file))
+            self.store.write_participant(run_id, participant.id, state)
 
     def _native_transcript(
         self, participant: ParticipantSpec, session_id: str | None, session_ref: str | None
@@ -1003,6 +1103,7 @@ class Coordinator:
             "run_id": run_id,
             "result": overall,
             "turn_result": _aggregate_result(results),
+            "verification_scope": self._verification_scope(run_id, manifest),
             "manifest_file": str(self.store.manifest_path(run_id)),
             "notices": notices,
             "participants": participants,
@@ -1030,22 +1131,23 @@ class Coordinator:
         return command
 
     def _unverified_runs(self, origin: str, *, exclude: str) -> list[str]:
-        """Recent settled runs from this driver harness with no verification record."""
+        """Recent settled runs with pending assessment or known outdated coverage."""
         cutoff = time.time() - UNVERIFIED_LOOKBACK_SECONDS
         found: list[tuple[float, str]] = []
         for path in self.store.runs.glob("*/run.json"):
             if path.parent.name == exclude or path.stat().st_mtime < cutoff:
                 continue
             try:
-                manifest = json.loads(path.read_text())
-            except (OSError, json.JSONDecodeError):
+                manifest = read_json(path)
+                if (
+                    manifest.get("origin_harness") == origin
+                    and manifest.get("status") == "settled"
+                    and self._verification_scope(path.parent.name, manifest)["current"] is False
+                ):
+                    found.append((path.stat().st_mtime, path.parent.name))
+            except (OSError, ValueError, KeyError, TypeError):
+                # A damaged older run must not prevent returning a new result.
                 continue
-            if (
-                manifest.get("origin_harness") == origin
-                and manifest.get("status") == "settled"
-                and (manifest.get("verification") or {}).get("result") == "pending"
-            ):
-                found.append((path.stat().st_mtime, path.parent.name))
         return [run_id for _, run_id in sorted(found, reverse=True)[:UNVERIFIED_LIMIT]]
 
 
@@ -1078,9 +1180,10 @@ def _aggregate_result(results: list[SettledTurn]) -> str:
 
 
 def _checkout_fingerprint(cwd: str) -> dict[str, Any] | None:
-    """HEAD and dirty-file count of a git checkout, so a reader of a peer's line
-    citations can tell whether the files moved under it (field: reviews ran while the
-    driver edited the same checkout). None outside git."""
+    """Coarse checkout observations, not a content fingerprint or isolation proof.
+
+    Equal HEAD and dirty-file counts can conceal edits. None outside git.
+    """
     try:
         head = subprocess.run(
             ["git", "-C", cwd, "rev-parse", "HEAD"],

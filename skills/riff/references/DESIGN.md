@@ -259,7 +259,8 @@ runs/<run-id>/
 ├── participants/<participant-id>/...native state...
 ├── turns/<turn-id>.json
 ├── artifacts/<turn-id>.md
-└── logs/<turn-id>.log
+├── logs/<turn-id>.log
+└── verification/<verification-id>/check-<number>.log
 ```
 
 Treat the state directory as private data, including artifacts, raw process logs,
@@ -299,6 +300,25 @@ duration, output hash, and output tail; with only executed checks the result is
 derived from exit codes, and a claimed `passed` that contradicts a failing command
 is rejected. A `--check` string is recorded as `asserted`: the driver's statement,
 honestly labelled, never presented as executed (`RIF-DELEGATE-002`).
+
+Verification records have distinct identifiers and log directories. Their coverage
+binds the assessment to participant turns and artifact hashes observed before
+checks begin. Status derives currentness from the latest turns instead of storing
+a flag that a reply could invalidate silently. A later failed attempt does not
+erase evidence about an earlier artifact or inherit its passing result. A fresh
+assessment can acknowledge that failure and become current while the participant
+still shows as failed; this clears the reminder without inventing success. Legacy
+records without coverage remain readable with unknown scope; preserving records
+now cannot restore logs overwritten by an earlier version.
+
+The coordinator snapshots coverage under the run lock, executes commands without
+holding that lock, and compares the current state when recording. A reply during
+checks leaves the record tied to the starting snapshot. This protects attribution,
+not the working tree: checkout fingerprints are limited observations, and neither
+artifact hashes nor a passing command prove that files stayed unchanged. `status`
+uses the same lock when available. For read-only access it falls back to atomic
+file reads and returns `snapshot_consistent: false`, since the files may then
+represent different moments.
 
 `validate` and `run` also return lint warnings for valid requests that tend to
 waste or bias a run: a delegation without acceptance criteria or out-of-scope

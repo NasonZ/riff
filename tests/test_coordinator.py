@@ -494,6 +494,112 @@ class CoordinatorTests(unittest.TestCase):
         manifest = self.coordinator.status(run_id)["manifest"]
         self.assertTrue(manifest["verification"]["checks"][0]["timed_out"])
         self.assertEqual([entry["result"] for entry in manifest["verification_history"]], ["partial"])
+        historical = manifest["verification_history"][0]
+        latest = manifest["verification"]
+        self.assertNotEqual(historical["id"], latest["id"])
+        paths = []
+        for record in (historical, latest):
+            for check in record["checks"]:
+                if check["kind"] == "executed":
+                    path = Path(check["output_file"])
+                    paths.append(path)
+                    self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), check["output_sha256"])
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertIn("suite ok", paths[0].read_text())
+
+    def test_verification_scope_tracks_replies_failures_and_legacy_records(self) -> None:
+        run_id = self.coordinator.run(self.request(participants=1))["run_id"]
+        self.coordinator.verify(run_id, verifier="driver", result=None, checks=[],
+                                integrated=False, commands=["printf checked"])
+        initial = self.coordinator.status(run_id)
+        self.assertTrue(initial["verification_scope"]["current"])
+        coverage = initial["manifest"]["verification"]["covers"]
+        self.coordinator.reply(run_id, "peer-0", "Develop the answer.")
+        status = self.coordinator.status(run_id)
+        self.assertFalse(status["verification_scope"]["current"])
+        self.assertEqual(status["verification_scope"]["participants"], {"peer-0": "uncovered"})
+        self.assertEqual(status["manifest"]["verification"]["covers"], coverage)
+        self.assertIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
+
+        self.coordinator.verify(run_id, verifier="driver", result="passed", checks=["Read reply"],
+                                integrated=False)
+        self.fake.fail_ids.add("peer-0")
+        reply = self.coordinator.reply(run_id, "peer-0", "Check another case.")
+        self.assertEqual(reply["verification_scope"]["participants"], {"peer-0": "failed"})
+        self.assertFalse(reply["verification_scope"]["current"])
+        self.assertIsNotNone(reply["verification_scope"]["covered_turns"]["peer-0"])
+        self.coordinator.verify(run_id, verifier="driver", result="not_performed", checks=[],
+                                integrated=False, note="Latest attempt failed; earlier answer retained.")
+        assessed = self.coordinator.status(run_id)["verification_scope"]
+        self.assertTrue(assessed["current"])
+        self.assertEqual(assessed["participants"], {"peer-0": "failed"})
+        self.fake.fail_ids.clear()
+        self.assertNotIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
+        # Legacy records remain readable, but cannot certify a later turn.
+        manifest = self.coordinator.store.read_manifest(run_id)
+        manifest["verification"].pop("covers")
+        self.coordinator.store.write_manifest(run_id, manifest)
+        self.assertIsNone(self.coordinator.status(run_id)["verification_scope"]["current"])
+        self.assertNotIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
+
+    def test_failed_and_unreadable_runs_do_not_break_assessment_reminders(self) -> None:
+        self.fake.fail_ids.add("peer-0")
+        failed = self.coordinator.run(self.request(participants=1))["run_id"]
+        self.coordinator.verify(failed, verifier="driver", result="not_performed", checks=[],
+                                integrated=False, note="Peer unavailable; no artifact to assess.")
+        self.assertTrue(self.coordinator.status(failed)["verification_scope"]["current"])
+        self.fake.fail_ids.clear()
+        fresh = self.coordinator.run(self.request(participants=1))
+        self.assertNotIn(failed, fresh["unverified_runs"])
+        self.assertEqual(fresh["verification_scope"]["participants"], {"peer-0": "unassessed"})
+        self.assertFalse(fresh["verification_scope"]["current"])
+        run_id = fresh["run_id"]
+        self.coordinator.verify(run_id, verifier="driver", result="passed", checks=["Read answer"],
+                                integrated=False)
+        state = self.coordinator.status(run_id)["participant_state"]["peer-0"]
+        Path(state["turns"][-1]).unlink()
+        scope = self.coordinator.status(run_id)["verification_scope"]
+        self.assertIsNone(scope["current"])
+        self.assertEqual(scope["participants"], {"peer-0": "unknown"})
+        with self.assertRaisesRegex(ValidationError, "readable participant turn records"):
+            self.coordinator.verify(run_id, verifier="driver", result="not_performed", checks=[],
+                                    integrated=False)
+        next_run = self.coordinator.run(self.request(participants=1))
+        self.assertTrue(next_run["ok"])
+        pending_id = next_run["run_id"]
+        state = self.coordinator.status(pending_id)["participant_state"]["peer-0"]
+        Path(state["turns"][-1]).unlink()
+        self.assertNotIn(pending_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
+
+    def test_reply_during_checks_keeps_evidence_bound_to_starting_turn(self) -> None:
+        run_id = self.coordinator.run(self.request(participants=1))["run_id"]
+        first_path = self.coordinator.status(run_id)["participant_state"]["peer-0"]["turns"][-1]
+        first_turn = read_json(Path(first_path))
+        started, release = threading.Event(), threading.Event()
+        execute = self.coordinator._execute_check
+
+        def blocked_check(*args, **kwargs):
+            started.set()
+            if not release.wait(10):
+                raise RuntimeError("test did not release verification")
+            return execute(*args, **kwargs)
+
+        with patch.object(self.coordinator, "_execute_check", side_effect=blocked_check):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(self.coordinator.verify, run_id, verifier="driver",
+                                     result=None, checks=[], integrated=False, commands=["printf evidence"])
+                try:
+                    self.assertTrue(started.wait(10))
+                    self.coordinator.reply(run_id, "peer-0", "New evidence.")
+                finally:
+                    release.set()
+                result = future.result(timeout=10)
+        self.assertEqual(result["result"], "passed")
+        self.assertFalse(result["verification_scope"]["current"])
+        self.assertTrue(result["verification_scope"]["changed_during_checks"])
+        record = self.coordinator.status(run_id)["manifest"]["verification"]
+        self.assertEqual(record["covers"]["peer-0"]["turn_id"], first_turn["turn_id"])
+        self.assertEqual(Path(record["checks"][0]["output_file"]).read_text(), "evidence")
 
     def test_only_settled_turns_spend_rounds_and_attempts_are_capped(self) -> None:
         flaky = FakeAdapter("fake", fail_ids={"peer-0"})
@@ -518,6 +624,9 @@ class CoordinatorTests(unittest.TestCase):
         state["status"] = "running"
         state["active_turn"] = {"started_at": "now", "coordinator_pid": os.getpid()}
         store.write_participant(started["run_id"], "peer-0", state)
+        with self.assertRaisesRegex(ValidationError, "verification requires a settled run"):
+            self.coordinator.verify(started["run_id"], verifier="driver", result="not_performed",
+                                    checks=[], integrated=False)
         with self.assertRaisesRegex(ValidationError, "still has a running turn"):
             self.coordinator.reply(started["run_id"], "peer-0", "Anything new?")
         state["active_turn"]["coordinator_pid"] = 2**22 + 12345  # beyond pid_max

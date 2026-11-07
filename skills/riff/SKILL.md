@@ -162,7 +162,9 @@ command runs. With no checks, use `--result not_performed --note "..."` to prese
 what the exchange contributed and what remains open. `--view-changed yes|no` records
 a change to an existing view; omit it when not applicable and explain in the note.
 Use `--integrated` only once you actually apply a change or adopt a decision.
-Re-verifying preserves the prior record. See `PROTOCOLS.md` for further examples.
+Re-verifying preserves each record and its check logs. Records identify the turns
+and artifacts assessed; a later reply needs its own assessment. See `PROTOCOLS.md`
+for coverage, historical-record limits, and further examples.
 
 Lead with what the exchange makes possible for the user's work: a recommendation,
 a useful question, a design to try, or a checked result. Attribute the peer's
