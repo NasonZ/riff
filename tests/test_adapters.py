@@ -270,6 +270,16 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertIn('model_reasoning_effort="xhigh"', command)
         self.assertEqual(command[command.index("--model") + 1], "gpt-5")
 
+    def test_codex_reply_keeps_write_access(self) -> None:
+        # A resumed write participant must keep workspace-write; read scopes must not gain it.
+        write = CodexAdapter().build_command(self.turn("codex", tools="write", reply=True))
+        self.assertIn('sandbox_mode="workspace-write"', write)
+        self.assertNotIn("--sandbox", write)  # `codex exec resume` rejects --sandbox
+        for scope in ("read", "read+web"):
+            read = CodexAdapter().build_command(self.turn("codex", tools=scope, reply=True))
+            self.assertIn('sandbox_mode="read-only"', read)
+            self.assertNotIn('sandbox_mode="workspace-write"', read)
+
     def test_pi_uses_rpc_settlement_and_explicit_session(self) -> None:
         command, _, session_id = PiAdapter().build_command(
             self.turn(

@@ -181,10 +181,11 @@ servers remain. Inline or quoted MCP table forms that the filter cannot remove
 need canonical `[mcp_servers.<name>]` tables or a separate MCP-free `CODEX_HOME`.
 An unsupported form must fail visibly rather than silently restore tools.
 
-Resume options differ from start options. In particular, a resumed session keeps
-its original working/sandbox context; do not mechanically replay every start flag.
-`codex exec resume` rejects `--sandbox`; when a resumed turn genuinely needs a
-different sandbox, override it with `-c 'sandbox_mode="workspace-write"'`.
+Resume options differ from start options; do not mechanically replay every start
+flag. `codex exec resume` rejects `--sandbox`. Riff pins the requested scope with
+`-c 'sandbox_mode="workspace-write"'` for write peers and
+`-c 'sandbox_mode="read-only"'` for read peers, rather than relying on restored
+session settings or user defaults.
 
 Historical recovery lesson (`RIF-SESSION-001`): Codex writes rollout files while a
 run is active. If a child dies before the event stream is captured:

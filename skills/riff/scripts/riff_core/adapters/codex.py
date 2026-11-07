@@ -139,6 +139,10 @@ class CodexAdapter(HarnessAdapter):
             command.extend(
                 ["resume", "--json", "-o", turn.artifact_path]
             )
+            # Resume rejects --sandbox. Pin both scopes so neither user defaults
+            # nor restored session settings silently change the requested authority.
+            sandbox = "workspace-write" if turn.participant.tools == "write" else "read-only"
+            command.extend(["-c", f'sandbox_mode="{sandbox}"'])
         else:
             command.extend(
                 [
