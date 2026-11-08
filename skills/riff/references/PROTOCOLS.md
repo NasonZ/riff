@@ -18,6 +18,9 @@ reasons, use [the playbook](PLAYBOOK.md).
 
 ## Common run contract
 
+Keep request files outside the checkout and installed skill; they can contain
+private task context. Pass their absolute paths to `validate` and `run`.
+
 Every run has:
 
 - an origin harness;

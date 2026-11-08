@@ -17,35 +17,34 @@ Examples here describe collaboration patterns, not a published user dataset.
 
 ## Inquiry across perspectives
 
-Riff's motivating idea is richer exploration through an exchange between models.
-“Semantic spaces” names the associations, distinctions, examples, and possible
-framings they can bring to a problem. It is an intuition for designing the
-interaction, not a claim that Riff measures their internal representations or
-that different model names imply independent knowledge or errors.
+Riff's motivating idea is that an exchange between models can explore a problem
+more richly than one model alone. Semantic spaces is the working name for what
+each brings: the associations, distinctions, examples and framings available to
+it. The term is a design intuition. It does not claim that Riff measures internal
+representations, or that different model names imply independent knowledge or
+errors.
 
-An encounter with another perspective can change what becomes noticeable in a
-familiar problem. A different representation may bring a relationship into view;
-an analogy may make a new approach imaginable. In Riff, the practical possibility
-is that one contribution changes what another participant can usefully consider
-next. Developing an analogy or counterexample can produce a question neither
-initial answer contained. The driver must be open to that change as well.
-Calling another model a peer means little if every follow-up steers it back to the
-driver's original framing.
+Meeting another perspective changes what is noticeable in a familiar problem. A
+different representation brings a relationship into view; an analogy makes a new
+approach imaginable. In Riff, one contribution changes what another participant
+can usefully consider next, and developing an analogy or counterexample can
+produce a question neither first answer contained. This applies to the driver as
+much as to the peer: if every follow-up steers the peer back to the driver's
+original framing, the exchange has one perspective in it.
 
-There is a connection here to philosophical and scientific inquiry. Peirce
-distinguished forming an explanatory hypothesis, deriving its consequences, and
-testing it through experience. That distinction helps keep invention and warrant
+Peirce distinguished forming an explanatory hypothesis, deriving its consequences,
+and testing it through experience. The distinction keeps invention and warrant
 separate: a promising idea deserves development, while a factual claim needs
-appropriate evidence. Conversation can contribute to each stage, including the
-design of an experiment; agreement cannot substitute for its result.
+evidence. Conversation can contribute to each stage, including the design of an
+experiment; agreement cannot substitute for its result.
 [Peirce, *Pragmatism: Instinct and Abduction*](https://www.textlog.de/7658.html).
 
-Perspective-taking adds another practical discipline: consider what the other
-participant has seen, which assumptions its answer depends on, and what would
-make the contribution intelligible or useful to it. This is a design principle
-for communicating across different contexts. Riff does not require a claim about
-models possessing human minds. The research below offers related ideas and
-limited empirical results, rather than a proof of Riff's effectiveness.
+Perspective-taking is the practical discipline that follows: consider what the
+other participant has seen, which assumptions its answer depends on, and what
+would make a contribution intelligible or useful to it. This is a principle for
+communicating across different contexts, and it needs no claim that models have
+human minds. The research below offers related ideas and limited empirical
+results, not a proof of Riff's effectiveness.
 
 ## Conversation shape
 
@@ -214,12 +213,23 @@ every task, or that the current skill outperforms a strong single-agent baseline
   checking the underlying claim directly when possible. Rubric grading is not
   collaborative problem-solving: the result does not show that same-family peers
   always agree, or that choosing another family establishes independence.
-- **Persuasion can defeat judgment.**
+- **Persuasion can defeat judgment.** [*Who Flips?*](https://arxiv.org/abs/2606.16011),
+  published 14 June 2026, challenges a correct multiple-choice answer with a coherent
+  argument for a wrong option and finds flip rates of 17.5–97.3% across seven
+  frontier models and 57 MMLU subjects, without overt social pressure;
+  self-attributed arguments flip more. [*Easier to Mislead Than to
+  Correct*](https://arxiv.org/abs/2606.01637), published 1 June 2026, shows across
+  four open-weight models and seven QA datasets that simulated peer agreement
+  misleads initially correct models more easily than it corrects wrong ones, that
+  authority labels raise adoption regardless of correctness, and that chain-of-thought
+  and reflection do not reliably prevent harmful revision; it recommends verifying
+  peer answers rather than aggregating them. Both use multiple-choice QA, not
+  open-ended collaboration.
   [*MultiAgent Collaboration Attack*](https://arxiv.org/abs/2406.14711) and
   [*When collaboration fails*](https://www.nature.com/articles/s41598-026-42705-7)
-  study adversarial influence within model debates. They motivate assessing reasons
-  and evidence rather than confidence or consensus. Their attack settings do not
-  measure the frequency of such failures in ordinary Riff use.
+  study deliberately adversarial agents in debate; their attack settings do not
+  measure the frequency of such failures in ordinary Riff use. Together these
+  motivate assessing reasons and evidence rather than confidence or consensus.
 - **A persona is not a perspective.**
   [*Persona is a Double-edged Sword*](https://arxiv.org/abs/2408.08631) finds that
   role-playing can help or harm reasoning under its tested conditions.

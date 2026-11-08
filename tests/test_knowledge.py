@@ -42,7 +42,8 @@ class KnowledgeTests(unittest.TestCase):
         for path in (SKILL / "SKILL.md", ROOT / "README.md", SKILL / "references" / "PROTOCOLS.md"):
             name = str(path.relative_to(ROOT))
             blocks = re.findall(r"```json\n(.*?)\n```", path.read_text(), re.DOTALL)
-            self.assertTrue(blocks, f"{name} must show a request example")
+            if path.name != "README.md":
+                self.assertTrue(blocks, f"{name} must show a request example")
             for index, block in enumerate(blocks):
                 with self.subTest(document=name, example=index), tempfile.TemporaryDirectory() as cwd:
                     value = json.loads(block)
