@@ -8,6 +8,9 @@ first agent's answer. Where the two readings differ, you have somewhere to look.
 Where they agree, you still check what matters. You direct what is worth
 investigating and decide what the difference means.
 
+Riff is engineered diligence: the ordinary habits of a careful colleague, written
+down as rules the agents follow.
+
 Your agent is the **driver**: it briefs the second agent, reads what comes back,
 follows up and answers for the result. The second agent is the **peer**. Each runs
 in a harness: the CLI or app, such as Claude Code or Codex, that gives an agent its
@@ -96,8 +99,13 @@ The separate first readings were a **consult**. The follow-up became a
 **discussion**. **Delegation** would follow once the investigation has named a
 change worth trying and the checks that would test it. That arc is typical: Riff suits
 work whose criterion still has to be discovered, and a riff often ends with the
-check that makes handing the work over safe. Other riffs start elsewhere: a
-critique of a draft, an early idea taken further, or a task already ready to hand over.
+check that makes handing the work over safe. Use follows checkability elsewhere
+too: across 207,049 research sessions, scientists used Claude two to four times
+more than their time on a task would predict where success is easy to verify and
+feedback is fast, and barely at all where it is not
+([Anthropic, 5 November 2026](https://www.anthropic.com/research/how-researchers-use-claude#how-use-relates-to-capabilities)).
+Other riffs start elsewhere: a critique of a draft, an early idea taken further, or
+a task already ready to hand over.
 
 ## Ask for a peer
 
@@ -139,11 +147,11 @@ See [choosing the contribution](skills/riff/references/PLAYBOOK.md#choose-the-co
 
 In the example, the two readings could differ because Codex's brief carried the
 sources and not Claude's diagnosis, and the difference was worth following because
-the request had left "slow" open. Both followed Riff's rules. Riff is engineered
-diligence. Its rules are the ordinary habits of a careful colleague: get a second
-reading before committing, keep it independent, ask for reasons when the readings
-differ, and say what was assumed when the request left a gap. Riff adds structure,
-so the habits hold under time pressure and leave a record.
+the request had left "slow" open. Both followed Riff's rules, the habits of a
+careful colleague made explicit: get a second reading before committing, keep it
+independent, ask for reasons when the readings differ, and say what was assumed
+when the request left a gap. Riff adds structure, so the habits hold under time
+pressure and leave a record.
 
 The skill states the habits to the agents as rules, in the order a riff runs: what
 goes into the brief, how the driver works while the peer does, what happens with
