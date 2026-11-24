@@ -71,6 +71,17 @@ existing answers. This is a design rationale for making assumptions visible and
 returning choices of purpose to the user, not a requirement to ask about every
 ordinary implementation choice.
 
+A slop sink is this failure at scale: plausible work accumulates on a premise
+nobody tested, and the cost of finding and correcting it falls to whoever comes
+next. More rounds do not drain it. An exchange in which nothing new can be
+observed only rearranges what the participants already believed, so a planning
+discussion needs the real materials in front of it and a cheap check that could
+prove it wrong. Bound the exchange as well: it is there to catch an expensive
+mistake before work is built on it. Whether this is the largest cost of agent
+work has not been measured. The habit set out in
+[the design](DESIGN.md#purpose-and-boundary) is the guard: a premise stays a
+premise until something checks it.
+
 Withhold a proposed answer when seeking an independent assessment. Supply it when
 asking for critique of that proposal. Record uncertainty honestly when there is no
 prior view. These are different starting conditions, not levels of rigour.
@@ -198,6 +209,23 @@ every task, or that the current skill outperforms a strong single-agent baseline
   result depends on a specified model of belief updates. The practical implication
   is to compare against simpler ways of spending the same budget, and investigate
   what the interaction actually adds.
+- **What an exchange can bring in.** Discussion between models covers three
+  different things. In answer aggregation, several agents answer and one answer is
+  chosen or voted for. In argument exchange, participants read one another's
+  reasoning and gain no new evidence. In evidence-seeking collaboration, they
+  retrieve sources, inspect artifacts or run checks while they talk. The voting
+  result above compares the first two. Studies that retrieve evidence during the
+  debate report gains over standard debate: Jeong et al.,
+  [*Tool-MAD*](https://arxiv.org/abs/2601.04742), published 8 January 2026, on
+  four fact-verification benchmarks, and Chowdhury et al.,
+  [*PROClaim*](https://arxiv.org/abs/2603.28488), published 30 March 2026, at
+  81.7% accuracy on Check-COVID, ten points above standard debate, with retrieval
+  driving most of the gain. Both are read here from their abstracts, which report
+  no comparison with a single agent given the same retrieval. For Riff the
+  working test is whether an exchange can introduce an observation that should
+  change what a participant believes. A retrieved passage or a failing test can;
+  agreement cannot. Evidence is no oracle either: a document can be wrong, and a
+  test can cover the wrong property.
 - **Different names do not ensure independent errors.** Kohli's [*Nine Judges, Two
   Effective Votes*](https://arxiv.org/html/2605.29800) published 28 May 2026, tests
   nine judges from seven families on three natural-language inference datasets and

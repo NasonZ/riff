@@ -72,6 +72,8 @@ peer's closing limits serve the first two rows, the verification record the thir
 and the attempt history the fourth;
 [state and observability](#state-and-observability) takes the mechanics in turn.
 Wherever Riff could round an uncertainty up to a fact, it records the uncertainty.
+The failure this guards against is the
+[slop sink](NOTES.md#conversation-shape).
 
 Adapters compile the common contract into native harness operations. Riff does not
 become another model provider registry, tool runtime, sandbox, or agent framework.
