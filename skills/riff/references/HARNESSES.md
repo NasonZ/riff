@@ -187,6 +187,12 @@ Relevant mappings:
 
 - model → `--model`;
 - reasoning effort → `-c 'model_reasoning_effort="<level>"'`;
+- peer stance → `-c developer_instructions="<note>"` on every turn. Codex inserts
+  it as a developer-role message that adds to its base instructions; the
+  `model_instructions_file` alternative replaces them and is discouraged. Checked
+  on codex-cli 0.169.0: the instruction held on resumed turns whether or not it was
+  passed again. Claude Code and Pi take the same note through
+  `--append-system-prompt`;
 - no/read/read+web/write tools → sandbox mode, the top-level `web_search`
   setting and prompt authority. Web search is on by default in codex-cli
   0.160.0 and `[features].web_search` is deprecated, so Riff passes

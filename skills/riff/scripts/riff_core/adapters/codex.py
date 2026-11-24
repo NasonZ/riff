@@ -15,6 +15,7 @@ from ..process import child_environment, run_process
 from ..models import SettledTurn, TurnRequest, ValidationError
 from ..state import default_state_root, private_directory
 from .base import (
+    PEER_SYSTEM_NOTE,
     HarnessAdapter,
     classify_error_text,
     executable,
@@ -165,6 +166,11 @@ class CodexAdapter(HarnessAdapter):
                     else "read-only",
                 ]
             )
+        # The peer stance reaches Claude, Pi, and Hermes peers as system text; Codex
+        # takes it as developer instructions, which add to its base instructions and
+        # hold on resumed turns (codex-cli 0.169.0, `developer_instructions`). JSON
+        # string escapes are valid TOML basic-string escapes.
+        command.extend(["-c", f"developer_instructions={json.dumps(PEER_SYSTEM_NOTE)}"])
         # codex-cli enables web search by default, and `[features].web_search` is
         # deprecated in 0.160.0, so the top-level setting is pinned in both
         # directions. Without this, `read` silently grants outbound network and

@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from scripts.riff_core.adapters.base import PEER_SYSTEM_NOTE
 from scripts.riff_core.adapters.claude import ClaudeAdapter
 from scripts.riff_core.adapters.codex import CodexAdapter
 from scripts.riff_core.adapters.hermes import HermesAdapter
@@ -244,7 +245,8 @@ class AdapterCommandTests(unittest.TestCase):
         # silently grants outbound network and the scope misreports authority.
         def web_setting(tools: str) -> str:
             command = CodexAdapter().build_command(self.turn("codex", tools=tools))
-            return command[command.index("-c") + 1] if "-c" in command else ""
+            settings = [value for flag, value in zip(command, command[1:]) if flag == "-c"]
+            return next((value for value in settings if value.startswith("web_search=")), "")
 
         self.assertEqual(web_setting("read+web"), 'web_search="live"')
         for scope in ("none", "read", "write"):
@@ -269,6 +271,14 @@ class AdapterCommandTests(unittest.TestCase):
         self.assertNotIn("--last", command)
         self.assertIn('model_reasoning_effort="xhigh"', command)
         self.assertEqual(command[command.index("--model") + 1], "gpt-5")
+        # Codex peers get the same peer stance as the others, on every turn, as
+        # developer instructions that add to (not replace) Codex's own.
+        for reply in (False, True):
+            command = CodexAdapter().build_command(self.turn("codex", reply=reply))
+            settings = [value for flag, value in zip(command, command[1:]) if flag == "-c"]
+            stance = [value for value in settings if value.startswith("developer_instructions=")]
+            self.assertEqual(len(stance), 1)
+            self.assertEqual(tomllib.loads(stance[0])["developer_instructions"], PEER_SYSTEM_NOTE)
 
     def test_codex_reply_keeps_write_access(self) -> None:
         # A resumed write participant must keep workspace-write; read scopes must not gain it.
