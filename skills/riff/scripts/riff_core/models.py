@@ -22,6 +22,8 @@ class ValidationError(ValueError):
 PARTICIPANT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # Allow long peer analyses; a recoverable timeout still costs a round trip.
 DEFAULT_TIMEOUT_SECONDS = 1800
+# Consult and discuss peers close with this section; next_steps quotes it back.
+LIMITS_HEADING = "Limits and open conditions"
 
 
 def _nonempty_string(value: Any, field_name: str) -> str:
@@ -232,6 +234,7 @@ class RunRequest:
     driver_position: DriverPosition = "withheld"
     driver_position_text: str | None = None
     driver_prediction: str | None = None
+    user_request: str | None = None
     context_refs: tuple[str, ...] = ()
     constraints: tuple[str, ...] = ()
     out_of_scope: tuple[str, ...] = ()
@@ -254,6 +257,7 @@ class RunRequest:
             "driver_position",
             "driver_position_text",
             "driver_prediction",
+            "user_request",
             "context_refs",
             "constraints",
             "out_of_scope",
@@ -350,6 +354,9 @@ class RunRequest:
         driver_prediction = value.get("driver_prediction")
         if driver_prediction is not None and not isinstance(driver_prediction, str):
             raise ValidationError("driver_prediction must be a string or null")
+        user_request = value.get("user_request")
+        if user_request is not None and not isinstance(user_request, str):
+            raise ValidationError("user_request must be a string or null")
         timeout_seconds = value.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
         if not isinstance(timeout_seconds, int) or isinstance(timeout_seconds, bool):
             raise ValidationError("timeout_seconds must be an integer")
@@ -379,6 +386,7 @@ class RunRequest:
             driver_position=driver_position,
             driver_position_text=driver_position_text,
             driver_prediction=(driver_prediction or "").strip() or None,
+            user_request=(user_request or "").strip() or None,
             context_refs=tuple(_string_list(value.get("context_refs"), "context_refs")),
             constraints=tuple(_string_list(value.get("constraints"), "constraints")),
             out_of_scope=tuple(_string_list(value.get("out_of_scope"), "out_of_scope")),
@@ -434,6 +442,16 @@ def request_warnings(request: RunRequest) -> list[dict[str, str]]:
             "delegate request has no out_of_scope; name the tempting adjacent work the "
             "worker must not do",
         )
+    if request.mode != "delegate" and not request.user_request:
+        # Field review: peers built faithfully on a driver's misreading of the user
+        # whenever the brief was their only view of what the user asked
+        # (RIF-CONTEXT-002).
+        warn(
+            "no-user-request",
+            "consult/discuss request has no user_request; quote the user's request or "
+            "stated aim in their own words, so the peer can tell it apart from your "
+            "framing in task",
+        )
     texts = [("task", request.task)]
     for participant in request.participants:
         if participant.task:
@@ -458,13 +476,6 @@ def request_warnings(request: RunRequest) -> list[dict[str, str]]:
                     "remove the driver's view from the task, or declare it with "
                     "driver_position=provided",
                 )
-        if request.mode != "delegate" and not request.driver_prediction:
-            warn(
-                "no-driver-prediction",
-                "independent-first run has no driver_prediction; record the starting "
-                "expectation or uncertainty when useful. If there is no prior position "
-                "to withhold, use driver_position=none; do not invent a prediction",
-            )
     for participant in request.participants:
         if participant.harness != "claude" or participant.tools == "none":
             continue

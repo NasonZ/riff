@@ -131,7 +131,6 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         commands=args.run,
         cwd=args.cwd,
         command_timeout_seconds=args.run_timeout_seconds,
-        view_changed=None if args.view_changed is None else args.view_changed == "yes",
     )
 
 
@@ -256,11 +255,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="free-text check the driver performed; recorded as asserted, not executed",
-    )
-    verify.add_argument(
-        "--view-changed",
-        choices=("yes", "no"),
-        help="whether an existing view changed; omit when not applicable and explain in --note",
     )
     verify.add_argument("--integrated", action="store_true")
     verify.add_argument(

@@ -80,7 +80,8 @@ question, or expose a choice that belongs to the user.
 
 A driver can lose the skill text during context compaction. The coordinator's
 result therefore carries the next action: read artifacts, inspect denied access,
-check relevant claims, and record the outcome. The command should be executable
+carry each peer's stated limits and the user's own words into the account, check
+relevant claims, and record the outcome. The command should be executable
 with the returned run ID and state directory.
 
 Different tasks need different outcome records. Code changes need acceptance

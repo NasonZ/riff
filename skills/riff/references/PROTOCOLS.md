@@ -56,7 +56,8 @@ reframing, or development of an idea.
 Default flow:
 
 1. Set `driver_position` to `withheld`, `provided`, or `none` according to the
-   context you are sending. Record an expectation or uncertainty in
+   context you are sending. Quote the user's request in `user_request`, apart
+   from your brief in `task`. Record an expectation or uncertainty in
    `driver_prediction` when useful; it is private to the driver record.
 2. For an independent assessment, investigate and form your own view while the
    peer works; then collect one settled artifact from every participant.
@@ -92,6 +93,7 @@ For an exploration with no prior position:
   ],
   "driver_position": "none",
   "driver_prediction": "No preferred sync design yet; unclear which offline changes should coexist or need reconciliation.",
+  "user_request": "Researchers keep losing corrections they make offline. What could sync look like?",
   "context_refs": ["docs/field-workflow.md"],
   "acceptance_criteria": ["Connect proposals to the field workflow; label assumptions about sync and researcher needs"],
   "out_of_scope": ["Implementing sync"]
@@ -192,7 +194,8 @@ A multi-peer discussion including two instances of the same harness:
     {"id": "gemini-high", "harness": "pi", "provider": "google", "model": "gemini", "cwd": "/repo", "tools": "none", "params": {"thinking": "high"}}
   ],
   "coordination": {"dispatch": "broadcast", "independent_first": true, "max_rounds": 3},
-  "driver_prediction": "Design B, unless the shared cache makes invalidation unsafe."
+  "driver_prediction": "Design B, unless the shared cache makes invalidation unsafe.",
+  "user_request": "Which of the two designs should we build, and what would make you change your mind?"
 }
 ```
 
@@ -213,7 +216,7 @@ After inspecting a consult's decisive factual claim:
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
   --result passed --check "Compared the migration-order claim with src/migrate.py" \
-  --view-changed yes --note "The concern is supported; implementation is pending."
+  --note "The concern is supported and changed my plan; implementation is pending."
 ```
 
 With only `--check`, `--result` is required: `passed`, `partial`, or `failed` refers
@@ -229,10 +232,9 @@ python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
   --note "I suggested separating observations from corrections; the peer developed the sync design and identified a correction arriving after reconciliation. Next: prototype that case. No prior preference or adoption; implementation and researcher comprehension untested."
 ```
 
-This closes a pending record without claiming the ideas were verified. Omit
-`--view-changed` when there was no prior view to compare; when there was one, record
-`yes` or `no` and explain the contribution. A discussion can be useful without
-changing a view or adopting a decision.
+This closes a pending record without claiming the ideas were verified. When you had
+a prior view, say in the note whether the exchange changed it and why. A discussion
+can be useful without changing a view or adopting a decision.
 
 For delegated code, run the relevant acceptance checks and inspect the diff before
 integration. Once the change is actually applied, record it, for example:
@@ -322,9 +324,10 @@ If a process is interrupted:
 If an intended independent-first prompt accidentally included the driver's answer,
 start a fresh native session. A follow-up cannot undo the initial anchoring.
 
-A timeout is a failed turn, not necessarily a lost session. Reply to the same
-participant asking for a concise final answer when its native session remains
-recoverable. Failed turns do not spend `max_rounds`, so recovery never
+A timeout is a failed turn, not necessarily a lost answer or a lost session. A
+peer can time out after writing its artifact: read it first, and treat it as the
+answer if it is complete. Otherwise reply to the same participant asking for a
+concise final answer when its native session remains recoverable. Failed turns do not spend `max_rounds`, so recovery never
 costs the discussion a round; attempts are capped at twice the round budget. For Pi,
 `riff.py progress` shows whether the turn made progress before it timed out, and the
 native session file must exist before a reply can resume it.

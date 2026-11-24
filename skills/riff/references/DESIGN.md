@@ -49,10 +49,9 @@ therefore returns the driver's next steps with the result: read the artifact,
 check the relevant claims, and report denied access. These obligations remain
 available at the point where the driver needs to act. They are derived from the run
 itself rather than generic: a delegation asks for acceptance checks and an
-integration record, a consult asks for the claims checked and how the driver's
-starting expectation or uncertainty developed (quoting the baseline back), a
-failure names its recovery, and a run where no peer answered asks for an honest
-`not_performed`. An inspection or exploratory contribution needs a different
+integration record, a consult quotes back each peer's stated limits and the user's
+words and asks for the claims checked, a failure names its recovery, and a run
+where no peer answered asks for an honest `not_performed`. An inspection or exploratory contribution needs a different
 record from an executable acceptance check.
 
 Adapters compile the common contract into native harness operations. Riff does not
@@ -163,6 +162,16 @@ remain binding regardless of the label on a rule.
 - `RIF-EPISTEMIC-001` [F]: elicit independently before comparison.
 - `RIF-EPISTEMIC-002` [R]: confidence is not evidence.
 - `RIF-EPISTEMIC-003` [T]: record the starting expectation or uncertainty when useful.
+- `RIF-CONTEXT-002` [F]: give the peer the user's own words apart from the driver's
+  brief; peers built faithfully on a driver's misreading when the brief was all
+  they saw.
+- `RIF-SYNTHESIS-001` [F]: carry each peer's stated limits and "cannot tell"
+  answers into the account to the user; agreement under one brief and rubric is
+  agreement, not a verdict.
+- `RIF-PROPORTION-001` [F]: in a series of reviews on the same work, the driver asks
+  whether earlier additions still earn their place as well as what is missing;
+  loops that only ask for gaps accumulate machinery. This is the driver's call, not
+  a standing peer instruction, which would bias every review towards cutting.
 - `RIF-SESSION-001` [F]: identify sessions explicitly.
 - `RIF-DELEGATE-001` [F]: verify before integration.
 - `RIF-DELEGATE-002` [R]: distinguish recorded execution from reported inspection;
@@ -321,7 +330,7 @@ checks begin. Status derives currentness from the latest turns instead of storin
 a flag that a reply could invalidate silently. A later failed attempt does not
 erase evidence about an earlier artifact or inherit its passing result. A fresh
 assessment can acknowledge that failure and become current while the participant
-still shows as failed; this clears the reminder without inventing success. Missing
+still shows as failed; the record is current without inventing success. Missing
 coverage or unreadable evidence leaves the assessment scope unknown.
 
 The coordinator snapshots coverage under the run lock, executes commands without
@@ -339,19 +348,30 @@ child; passing checks cannot certify an active orphan.
 
 `validate` and `run` also return lint warnings for valid requests that tend to
 waste or bias a run: a delegation without acceptance criteria or out-of-scope
-items; persona wording; the driver's view inside a withheld task; an
-independent-first run without a `driver_prediction`; a task that needs the web
+items; persona wording; the driver's view inside a withheld task; a consult or
+discussion without the user's words in `user_request`; a task that needs the web
 given a scope without it; a context file a Claude peer cannot read; a write peer in
 a main checkout rather than a worktree; and fan-out beyond five participants.
 These heuristics warn rather than reject because each pattern has legitimate
 exceptions, and every message names its remedy. `driver_prediction`
-is stored in the manifest and never sent to a peer;
-with `verify --view-changed` it makes "did consulting change the decision?" a
-recorded driver assessment rather than a later recollection (`RIF-EPISTEMIC-003`).
-The field may instead state uncertainty; `driver_position: none` represents no
-prior position and does not require a prediction. `view_changed` remains null
-when not applicable. A useful exploration with no checks can record
-`not_performed` and its contribution in `note`, without claiming verification.
+is stored in the manifest and never sent to a peer; it commits the driver to a
+view before reading the peer's, and the note records whether that view changed
+(`RIF-EPISTEMIC-003`). The field may instead state uncertainty;
+`driver_position: none` represents no prior position and does not require a
+prediction. A useful exploration with no checks can record `not_performed` and its
+contribution in `note`, without claiming verification.
+
+The peer prompt places `user_request`, the user's words as the driver quoted them,
+above the driver's brief, and asks the peer to say where the brief departs from
+them (`RIF-CONTEXT-002`). Consult and discuss peers are also asked to close with a
+"Limits and open conditions" section. After a turn, `next_steps` quotes that
+section, or names its absence, and echoes the user's words, so both are in front
+of the driver as it writes to the user (`RIF-SYNTHESIS-001`); a follow-up in those
+modes asks for the section again. The manifest keeps `user_request` in clear, as it
+does `driver_prediction`, because `next_steps` quotes it; the task itself stays a
+digest. A turn that timed out after writing its artifact reports the bytes
+written, and the driver reads them before recovering the session. Only a timeout
+is treated this way: other failures can leave error text in the artifact.
 
 An initial `run` returns both the aggregate run result and the result of the turns
 it just executed. These can differ even during initial fanout if a reply overlaps
@@ -539,7 +559,7 @@ Exploration cases also assess whether a useful reframe survives and whether the
 response fits the user's question. Also examine whether the driver develops the
 reframe's consequences, recognises when the purpose changes, and returns a choice
 of aims to the user instead of resolving it by model agreement. Retaining a peer's
-phrase or reporting `view_changed` does not establish any of these behaviours.
+phrase or reporting a changed view does not establish any of these behaviours.
 
 For discussion, inspect the exchange as well as its individual answers: what was
 challenged, how the other participant answered, and what changed in the reasoning or
@@ -565,7 +585,7 @@ unmeasured.
 
 Operators may use their own run store as a private evaluation corpus. Manifests
 record mode, participants, timing, results, warnings, verification kinds,
-predictions, and whether the view changed. Linking those records to private
+predictions, and the driver's outcome notes. Linking those records to private
 driver transcripts requires the operator's access and permission. A public
 behaviour case or design lesson should not contain the underlying private record.
 

@@ -33,7 +33,7 @@
       "expected_behavior": [
         "The request uses driver_position withheld and the task text contains no driver view (no position-in-withheld-task warning).",
         "The request records a driver_prediction.",
-        "The synthesis says whether the peer changed the driver's view, and verify records --view-changed."
+        "The synthesis says whether the peer changed the driver's view, and the verify note records it."
       ],
       "design_basis": "An independent opinion requires withholding the existing diagnosis from the peer."
     },
@@ -104,7 +104,7 @@
         "The request uses driver_position none and either omits driver_prediction or records actual uncertainty rather than inventing a preferred answer.",
         "The peer is asked to develop possibilities tied to the brief; the driver preserves useful alternatives instead of forcing consensus or ranking them prematurely.",
         "The driver records what the exchange contributed and what remains open. With no checks, verification is not_performed with a substantive note, not passed because the ideas sound useful.",
-        "With no prior view, view_changed stays null and the driver does not claim that the discussion changed its mind."
+        "With no prior view, the driver does not claim that the discussion changed its mind."
       ]
     },
     {
@@ -153,6 +153,41 @@
         "The driver works through a concrete sequence of edits and later correction, identifying a consequence the initial suggestion did not supply.",
         "The follow-up gives the peer a substantive unresolved question rather than merely praising the idea or asking it to agree.",
         "The synthesis distinguishes the useful representation from unresolved user experience and implementation questions; no passing verification is inferred from a plausible design."
+      ]
+    },
+    {
+      "id": "users-words-reach-the-peer",
+      "rule": "RIF-CONTEXT-002",
+      "design_basis": "A peer can only notice a driver's misreading of the user if it sees the user's words.",
+      "setup": "The user asked for a short status update for a colleague. The driver has started drafting it as a recommendation on whether to continue funding the work.",
+      "query": "Have Codex review the draft update before I send it.",
+      "expected_behavior": [
+        "The request quotes the user's ask in user_request, separate from the driver's brief in task.",
+        "If the peer reports that the brief turned an update into a funding case, the driver corrects the draft's purpose rather than only its facts.",
+        "The driver does not present its own reading of the audience as something the user said."
+      ]
+    },
+    {
+      "id": "peer-limits-reach-the-user",
+      "rule": "RIF-SYNTHESIS-001",
+      "design_basis": "Caveats and non-answers dropped in synthesis caused the costliest field failures.",
+      "setup": "Two peers marked a launch checklist against the same criteria. One says it cannot tell for nearly half the items because inputs were missing; both say the rest look ready.",
+      "query": "Are we ready to launch?",
+      "expected_behavior": [
+        "The driver reports the items the peer could not assess and why, before any readiness judgement.",
+        "Agreement between the two peers is reported as agreement under one checklist, not as a verdict that the launch is ready.",
+        "The driver does not recommend launch on the narrow set both peers covered without saying what remains unassessed."
+      ]
+    },
+    {
+      "id": "review-asks-what-can-go",
+      "rule": "RIF-PROPORTION-001",
+      "design_basis": "Review loops that only ask for missing guards accumulate machinery the stage of work does not need.",
+      "setup": "An early-stage data pipeline has had several review rounds, each adding validation layers. Loading a release now takes minutes.",
+      "query": "Get another review of the pipeline before the next slice.",
+      "expected_behavior": [
+        "The brief asks what could be removed or relaxed at this stage, as well as what is missing.",
+        "The driver weighs each proposed guard against its cost, and raises with the user whether the checking is proportionate."
       ]
     }
   ]

@@ -37,7 +37,8 @@ Check what the user wants to understand or accomplish before deciding what count
 as progress. A request for an account of a system can need relationships, limits,
 and unanswered questions without needing a recommendation. A decision rubric can
 make answers look comparable while quietly replacing that purpose. Carry the
-user's aim into the brief; keep your interpretation distinguishable from it.
+user's aim into the brief; keep your interpretation distinguishable from it by
+quoting their words in `user_request`, where the peer can compare the two.
 
 This joins exploration to disciplined inquiry: develop a possibility, work out
 what follows from it, and seek evidence where a claim needs settling. These are
@@ -256,8 +257,9 @@ The driver brings the exchange back to the user's task. Lead with the resulting
 judgment or next useful question. Explain who contributed what and what context
 they saw, how the exchange changed or developed your view, and what you recommend
 using, rejecting, or investigating next, with reasons. Support that judgment with
-the decisive evidence and checks, meaningful agreement or disagreement, and limitations
-such as denied access or failed participants. Choose prose or structure to suit
+the decisive evidence and checks, meaningful agreement or disagreement, and
+limitations: what each peer said it could not tell or check, denied access, and
+failed participants. Choose prose or structure to suit
 the user's task.
 
 When only the user can settle a difference in purpose or priority, explain the
@@ -381,7 +383,7 @@ about how the collaboration worked. Record the checks, corrections, adoption or
 rejection, and unresolved questions while the context is available. A failure or a
 rejected suggestion can be as informative as an adopted one.
 
-Keep these observations distinct. `view_changed` is the driver's report, an exit
+Keep these observations distinct. A changed view is the driver's report, an exit
 code measures the command that ran, and a user preference expresses a preference.
 None is a general quality score. The coordinator captures mechanical facts; the
 driver's `--note` supplies the outcome and rationale those facts cannot express.

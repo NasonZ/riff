@@ -138,6 +138,27 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn("`python3 -m unittest`", prompt)
         manifest = self.coordinator.status(started["run_id"])["manifest"]
         self.assertEqual(manifest["request"]["driver_prediction"], "Option B wins unless the cache is shared.")
+        # A delegate works to an output contract; the review-only asks stay out of it.
+        self.assertNotIn("Limits and open conditions", prompt)
+
+        consult = RunRequest.from_dict({
+            "mode": "consult", "task": "Find the weakest step in the launch plan.",
+            "origin_harness": "codex",
+            "participants": [{"id": "peer-1", "harness": "fake", "cwd": str(self.cwd)}],
+            "driver_position": "withheld",
+            "user_request": "I only want an update for a colleague, not a funding case.",
+        })
+        self.coordinator.run(consult)
+        prompt = self.fake.turns[-1].prompt
+        # The peer sees the user's words apart from the driver's framing of them, so
+        # it can say where the brief departs from what the user asked.
+        self.assertLess(prompt.index("not a funding case"), prompt.index("weakest step"))
+        self.assertIn("Task (the driver's brief)", prompt)
+        self.assertIn("departs from the user's request", prompt)
+        self.assertIn("'## Limits and open conditions'", prompt)
+        # Proportion is the driver's call in a series of reviews, not a standing
+        # instruction that would tilt every review towards cutting.
+        self.assertNotIn("removed, simplified", prompt)
 
     def test_reply_uses_the_exact_native_session(self) -> None:
         with patch("scripts.riff_core.lifecycle.utc_now", return_value="2026-01-01T00:00:00Z"):
@@ -545,7 +566,6 @@ class CoordinatorTests(unittest.TestCase):
         self.assertFalse(status["verification_scope"]["current"])
         self.assertEqual(status["verification_scope"]["participants"], {"peer-0": "uncovered"})
         self.assertEqual(status["manifest"]["verification"]["covers"], coverage)
-        self.assertIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
 
         self.coordinator.verify(run_id, verifier="driver", result="passed", checks=["Read reply"],
                                 integrated=False)
@@ -560,14 +580,12 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(assessed["current"])
         self.assertEqual(assessed["participants"], {"peer-0": "failed"})
         self.fake.fail_ids.clear()
-        self.assertNotIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
         # Missing coverage cannot certify a later turn.
         with self.coordinator.store.mutation(run_id) as control:
             control["assessments"][-1].pop("covers")
         self.assertIsNone(self.coordinator.status(run_id)["verification_scope"]["current"])
-        self.assertNotIn(run_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
 
-    def test_failed_and_unreadable_runs_do_not_break_assessment_reminders(self) -> None:
+    def test_failed_and_unreadable_runs_keep_an_honest_verification_scope(self) -> None:
         self.fake.fail_ids.add("peer-0")
         failed = self.coordinator.run(self.request(participants=1))["run_id"]
         self.coordinator.verify(failed, verifier="driver", result="not_performed", checks=[],
@@ -575,7 +593,6 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(self.coordinator.status(failed)["verification_scope"]["current"])
         self.fake.fail_ids.clear()
         fresh = self.coordinator.run(self.request(participants=1))
-        self.assertNotIn(failed, fresh["unverified_runs"])
         self.assertEqual(fresh["verification_scope"]["participants"], {"peer-0": "unassessed"})
         self.assertFalse(fresh["verification_scope"]["current"])
         run_id = fresh["run_id"]
@@ -594,7 +611,7 @@ class CoordinatorTests(unittest.TestCase):
         pending_id = next_run["run_id"]
         state = self.coordinator.status(pending_id)["participant_state"]["peer-0"]
         Path(state["turns"][-1]).unlink()
-        self.assertNotIn(pending_id, self.coordinator.run(self.request(participants=1))["unverified_runs"])
+        self.assertIsNone(self.coordinator.status(pending_id)["verification_scope"]["current"])
 
     def test_reply_during_checks_keeps_evidence_bound_to_starting_turn(self) -> None:
         run_id = self.coordinator.run(self.request(participants=1))["run_id"]
@@ -659,11 +676,6 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(self.coordinator.reply(started["run_id"], "peer-0", "Resume.")["ok"])
 
     def test_next_steps_fit_the_run_and_survive_without_the_skill(self) -> None:
-        earlier = self.coordinator.run(self.request(participants=1))
-        later = self.coordinator.run(self.request(participants=1))
-        self.assertIn(earlier["run_id"], later["unverified_runs"])
-        self.assertNotIn(later["run_id"], later["unverified_runs"])
-
         cases = [
             ("consult", False, {"passed", "not_performed"}),
             ("discuss", False, {"passed", "not_performed"}),
@@ -699,7 +711,6 @@ class CoordinatorTests(unittest.TestCase):
                     self.assertEqual(completed.returncode, 0, completed.stderr)
                     record = coordinator.status(started["run_id"])["manifest"]["verification"]
                     outcomes.add(record["result"])
-                    self.assertIsNone(record["view_changed"])
                     self.assertEqual(record["integrated"], mode == "delegate")
                     if record["result"] == "passed":
                         expected_kind = "executed" if mode == "delegate" else "asserted"
@@ -710,6 +721,47 @@ class CoordinatorTests(unittest.TestCase):
                     if mode != "delegate":
                         self.assertEqual(record["note"], "test input")
                 self.assertEqual(outcomes, expected_outcomes)
+
+    def test_next_steps_carry_peer_limits_and_the_users_words_into_synthesis(self) -> None:
+        class Limited(FakeAdapter):
+            def execute(self, turn: TurnRequest) -> SettledTurn:
+                settled = super().execute(turn)
+                if turn.participant.id == "peer-0":
+                    Path(turn.artifact_path).write_text(
+                        "## Finding\nThe retry path drops the idempotency key.\n\n"
+                        "## Limits and open conditions\nCannot tell for 5 of 12 checklist "
+                        "items: their inputs were not supplied.\n"
+                    )
+                return settled
+
+        adapter = Limited("fake")
+        coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": adapter})
+        request = replace(
+            self.request(participants=2, max_rounds=1),
+            user_request="Are we ready to launch next week?",
+        )
+        result = coordinator.run(request)
+        steps = "\n".join(result["next_steps"])
+        # A peer's own limits are quoted back for the account to the user ...
+        self.assertIn('peer-0 states these limits', steps)
+        self.assertIn("Cannot tell for 5 of 12 checklist items", steps)
+        # ... and a missing section is named rather than silently skipped.
+        self.assertIn("peer-1 gave no 'Limits and open conditions' section", steps)
+        self.assertIn("Report agreement as agreement", steps)
+        self.assertIn('The user asked: "Are we ready to launch next week?"', steps)
+        self.assertIn("peer-0 has used its round allowance (1)", steps)
+
+        coordinator.reply(result["run_id"], "peer-0", "I think the retry path is fine.", extend_rounds=1)
+        self.assertIn("'## Limits and open conditions'", adapter.turns[-1].prompt)
+        delegate = RunRequest.from_dict({
+            "mode": "delegate", "task": "Fix it.", "origin_harness": "codex",
+            "participants": [{"id": "peer-0", "harness": "fake", "cwd": str(self.cwd)}],
+            "driver_position": "none",
+        })
+        started = coordinator.run(delegate)
+        self.assertNotIn("gave no", " ".join(started["next_steps"]))
+        coordinator.reply(started["run_id"], "peer-0", "Also fix the second case.")
+        self.assertEqual(adapter.turns[-1].prompt, "Also fix the second case.")
 
     def test_timeout_next_step_resumes_the_same_session_with_a_longer_bound(self) -> None:
         class TimingOut(FakeAdapter):
@@ -726,6 +778,33 @@ class CoordinatorTests(unittest.TestCase):
         # a reply inherits the expired bound unless the step raises it, whatever the
         # harness's wording of the timeout
         self.assertIn("--timeout-seconds 14400", steps)
+        self.assertIn("timed out after writing", steps)
+        self.assertNotIn("No peer produced an answer", steps)
+
+        class TimingOutEmpty(TimingOut):
+            def execute(self, turn: TurnRequest) -> SettledTurn:
+                settled = super().execute(turn)
+                Path(turn.artifact_path).write_text("")
+                return settled
+
+        coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": TimingOutEmpty("fake")})
+        steps = " ".join(coordinator.run(self.request(participants=1))["next_steps"])
+        self.assertIn("timed out but its session survives", steps)
+        self.assertIn("No peer produced an answer", steps)
+
+        # Only a timeout can leave an answer behind a failed turn: another failure's
+        # artifact may hold error text, and must not be reported as a peer's answer.
+        class FailingWithOutput(FakeAdapter):
+            def execute(self, turn: TurnRequest) -> SettledTurn:
+                settled = super().execute(turn)
+                Path(turn.artifact_path).write_text("401 Unauthorized")
+                return settled
+
+        failing = FailingWithOutput("fake", fail_ids={"peer-0"})
+        coordinator = Coordinator(store=self.coordinator.store, adapters={"fake": failing})
+        steps = " ".join(coordinator.run(self.request(participants=1))["next_steps"])
+        self.assertIn("No peer produced an answer", steps)
+        self.assertNotIn("Limits and open conditions", steps)
 
     def test_documented_inspection_and_exploration_records_run_through_the_cli(self) -> None:
         root = Path(__file__).resolve().parent.parent

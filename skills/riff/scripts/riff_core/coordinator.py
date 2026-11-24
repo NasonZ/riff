@@ -16,6 +16,7 @@ from .adapters.base import HarnessAdapter
 from . import lifecycle
 from .evidence import checkout_fingerprint
 from .models import (
+    LIMITS_HEADING,
     ParticipantSpec,
     RunRequest,
     SettledTurn,
@@ -44,6 +45,8 @@ from .state import (
 RIFF_SCRIPT = Path(__file__).resolve().parent.parent / "riff.py"
 DEFAULT_WAIT_SECONDS = 540
 VERIFY_OUTPUT_TAIL_CHARS = 2000
+# Consult and discuss follow-ups keep the closing section next_steps quotes back.
+REPLY_LIMITS = f"Riff note: end again with '## {LIMITS_HEADING}'."
 DRIVER_SESSION_ENV = {
     "claude": ("CLAUDE_CODE_SESSION_ID", None),
     "codex": ("CODEX_THREAD_ID", None),
@@ -126,6 +129,7 @@ class Coordinator:
                 "task_digest": sha256_text(request.task),
                 "driver_position": request.driver_position,
                 "driver_prediction": request.driver_prediction,
+                "user_request": request.user_request,
                 "context_refs": list(request.context_refs),
                 "constraints": list(request.constraints),
                 "out_of_scope": list(request.out_of_scope),
@@ -319,9 +323,6 @@ class Coordinator:
         snapshot = capture(self.store.read_control(run_id))
         public = self._format(snapshot, results)
         public["warnings"] = snapshot.control.get("warnings", [])
-        public["unverified_runs"] = self._unverified_runs(
-            request.origin_harness, exclude=run_id
-        )
         return public
 
     def _block_dependency(self, run_id, request, participant, previous):
@@ -378,6 +379,8 @@ class Coordinator:
         ):
             raise ValidationError("reply timeout_seconds must be between 1 and 86400")
         control = self.store.read_control(run_id)
+        if control.get("mode") != "delegate":
+            prompt = prompt.rstrip() + "\n\n" + REPLY_LIMITS
         result = lifecycle.execute(
             self.store,
             self.adapters,
@@ -408,9 +411,6 @@ class Coordinator:
         snapshot = capture(self.store.read_control(run_id))
         public = self._result_snapshot(snapshot)
         public["warnings"] = snapshot.control.get("warnings", [])
-        public["unverified_runs"] = self._unverified_runs(
-            snapshot.control["origin_harness"], exclude=run_id
-        )
         return public
 
     def wait(self, run_id, *, timeout_seconds=DEFAULT_WAIT_SECONDS, poll_seconds=5.0):
@@ -434,9 +434,6 @@ class Coordinator:
                 # Use the same captured control, rather than formatting a new read.
                 public = self._result_snapshot(snapshot)
                 public["warnings"] = snapshot.control.get("warnings", [])
-                public["unverified_runs"] = self._unverified_runs(
-                    snapshot.control["origin_harness"], exclude=run_id
-                )
                 return public
             time.sleep(min(poll_seconds, max(0, deadline - time.monotonic())))
 
@@ -531,7 +528,6 @@ class Coordinator:
         commands=None,
         cwd=None,
         command_timeout_seconds=600,
-        view_changed=None,
     ):
         commands = [command for command in commands or [] if command.strip()]
         if result not in {None, "passed", "partial", "failed", "not_performed"}:
@@ -613,7 +609,6 @@ class Coordinator:
                     "checks": recorded,
                     "result": result,
                     "integrated": integrated,
-                    "view_changed": view_changed,
                     "note": note,
                     "verified_at": utc_now(),
                 }
@@ -723,7 +718,15 @@ class Coordinator:
 
     def _initial_prompt(self, request: RunRequest, participant: ParticipantSpec) -> str:
         task = participant.task or request.task
-        parts = [f"Mode: {request.mode}", f"Task\n{task}"]
+        parts = [f"Mode: {request.mode}"]
+        if request.user_request:
+            parts.append(
+                "The user's request, in their words (quoted by the driver)\n"
+                + request.user_request
+            )
+            parts.append(f"Task (the driver's brief)\n{task}")
+        else:
+            parts.append(f"Task\n{task}")
         if participant.focus:
             parts.append(f"Focused attention\n{participant.focus}")
         if request.context_refs:
@@ -768,7 +771,7 @@ class Coordinator:
                 + ". Run them exactly as written, without cd, pipes, or chaining."
             )
         parts.append("Authority\n" + authority)
-        parts.append(
+        response = (
             "Response\nReturn a self-contained artifact suited to the task. Give each "
             "material factual claim its evidence (file:line, command and result, or "
             "source URL), or label it "
@@ -777,6 +780,19 @@ class Coordinator:
             "For exploration, develop useful possibilities without forcing a decision. "
             "If the framing is wrong, say so and propose the better question."
         )
+        if request.user_request:
+            response += (
+                " If the driver's brief departs from the user's request (narrows it, "
+                "stretches it, or assumes an audience, decision, or constraint they did "
+                "not state), say so before building on it."
+            )
+        if request.mode != "delegate":
+            # RIF-SYNTHESIS-001; a delegate works to its own output contract.
+            response += (
+                f"\nEnd with a section headed '## {LIMITS_HEADING}': what you could not "
+                "tell or check, what your answer depends on, and what would change it."
+            )
+        parts.append(response)
         return "\n\n".join(parts)
 
     def script_invocation(self) -> str:
@@ -785,25 +801,6 @@ class Coordinator:
         if self.store.root != default_state_root():
             command += f' --state-dir "{self.store.root}"'
         return command
-
-    def _unverified_runs(self, origin: str, *, exclude: str) -> list[str]:
-        found = []
-        for path in self.store.runs.glob("*/run.json"):
-            if path.parent.name == exclude:
-                continue
-            try:
-                if path.stat().st_mtime < time.time() - 7 * 24 * 3600:
-                    continue
-                snapshot = capture(self.store.read_control(path.parent.name))
-                if (
-                    snapshot.control.get("origin_harness") == origin
-                    and snapshot.view["manifest"]["status"] == "settled"
-                    and snapshot.scope["current"] is False
-                ):
-                    found.append((path.stat().st_mtime, path.parent.name))
-            except (OSError, ValueError, KeyError, TypeError):
-                continue
-        return [key for _, key in sorted(found, reverse=True)[:5]]
 
 
 def _driver_session(harness: str | None) -> dict[str, Any] | None:

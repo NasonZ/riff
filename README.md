@@ -352,8 +352,9 @@ A sandboxed Codex driver also needs the
 Each run leaves a record on your machine, so the account the driver gives you can
 be checked later. State defaults to `$RIFF_STATE_DIR` when set, otherwise `$XDG_STATE_HOME/riff` or
 `~/.local/state/riff`. Each run keeps participant details, artifacts, session
-handles, failures, and usage where the harness reports it, plus the driver's
-starting expectation and later checks, decisions or open questions when supplied.
+handles, failures, and usage where the harness reports it, plus your request as
+the driver quoted it, the driver's starting expectation, and later checks,
+decisions or open questions when supplied.
 
 Riff has no record-upload service, but peer harnesses still send task context
 through their configured providers: local storage does not mean local inference.

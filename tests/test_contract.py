@@ -222,6 +222,7 @@ class RequestWarningTests(unittest.TestCase):
             "origin_harness": "claude",
             "participants": [{"id": "codex-a", "harness": "codex", "cwd": self.cwd}],
             "driver_prediction": "The cache invalidation path is the weak point.",
+            "user_request": "Before we ship this cache, tell me what could go wrong.",
         }
         value.update(updates)
         return [warning["code"] for warning in request_warnings(RunRequest.from_dict(value))]
@@ -255,14 +256,15 @@ class RequestWarningTests(unittest.TestCase):
                  "driver_position": "provided", "driver_position_text": "Option B."},
             ),
             (
-                "no-driver-prediction",
-                {"driver_prediction": None},
-                {"driver_prediction": "Uncertain whether task order or terminology is the problem."},
+                "no-user-request",
+                {"user_request": None},
+                {"user_request": "Is this cache safe to ship?"},
             ),
             (
-                "no-driver-prediction",
-                {"mode": "discuss", "driver_prediction": None},
-                {"mode": "discuss", "driver_position": "none", "driver_prediction": None},
+                "no-user-request",
+                {"mode": "discuss", "user_request": "  "},
+                {"mode": "delegate", "user_request": None, "out_of_scope": ["No API changes"],
+                 "acceptance_criteria": ["unittest passes"]},
             ),
             (
                 "scope-lacks-web",

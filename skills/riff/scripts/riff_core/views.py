@@ -176,7 +176,6 @@ def run_view(control: dict, observations: dict) -> dict:
             "checks": [],
             "result": "pending",
             "integrated": False,
-            "view_changed": None,
         },
         verification_history=assessments[:-1],
     )

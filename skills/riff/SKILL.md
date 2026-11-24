@@ -42,6 +42,11 @@ piece of work is worth that cost. Obey an explicit user roster. When asked only 
 “another model,” pick one complementary available peer and say which. Do not fan
 out simply because several harnesses are installed.
 
+When a review is one of a series on the same work, ask whether earlier additions
+still earn their place as well as what is missing. For writing and design, prefer
+one structural read to repeated rubric-marking rounds: peers marking against the
+same rubric tend to add words and precision rather than cut.
+
 Match the model to the work as well as the perspective. A clear, bounded task may
 suit a smaller or local model, leaving costly reasoning and driver context for
 uncertainty and review. Account for briefing, retries, and verification when
@@ -64,9 +69,11 @@ reconciliation” is a useful baseline. Do not invent a prediction or a change o
 mind to complete a record.
 
 Brief from the sources: carry the user's purpose, constraints, and relevant prior
-decisions as well as the facts. Distinguish what the user asked from your reading
-of it. If competing readings would change the work, make that uncertainty explicit
-instead of building it into every participant's brief.
+decisions as well as the facts. Quote the user's request or stated aim, in their
+words, in `user_request`; `task` is your brief. The peer sees both and is asked to
+say where your brief departs from what the user asked. If competing readings would
+change the work, make that uncertainty explicit instead of building it into every
+participant's brief.
 
 Invite reframing and direct attention to the problem (“check for lost-update
 races”) rather than assigning a persona. Assess factual claims by their evidence
@@ -119,6 +126,7 @@ A one-peer independent assessment (replace the paths with the task's real inputs
   ],
   "driver_position": "withheld",
   "driver_prediction": "Expect the cache invalidation path. A structural flaw would change the plan.",
+  "user_request": "Before we build on this design, tell me what it assumes that could be wrong.",
   "context_refs": ["docs/design.md"],
   "acceptance_criteria": ["Support factual concerns with file:line evidence"],
   "out_of_scope": ["Implementation changes"]
@@ -161,22 +169,25 @@ brief with the user's actual request. An audience, decision or constraint suppli
 by your own summary remains an interpretation, even if the peer had access to
 the original request. Correct unsupported assumptions before revising the work.
 
-Check material factual claims against code, tests, or sources before relying on
-them. Assess proposals against the user's aims and explain your judgment. A useful
-idea is not thereby a verified fact. For a consult where you checked cited code:
+Consult and discuss peers close with a "Limits and open conditions" section, which
+`next_steps` quotes back: carry it, and any "cannot tell" answers, into what you
+tell the user. Check material factual claims against code, tests, or sources before
+relying on them. Assess proposals against the user's aims and explain your
+judgment. A useful idea is not thereby a verified fact. For a consult where you
+checked cited code:
 
 ```bash
 python3 "$RIFF_ROOT/scripts/riff.py" verify --run-id <run-id> --verifier <you> \
   --result passed --check "Compared the cited claim with src/parser.py" \
-  --view-changed yes --note "The peer found a case my diagnosis missed; fix pending."
+  --note "The peer found a case my diagnosis missed; fix pending."
 ```
 
 Record only what you did. `--run` executes a check and derives the result from exit
 codes; `--check` records an inspection as asserted and requires `--result` when no
 command runs. With no checks, use `--result not_performed --note "..."` to preserve
-what the exchange contributed and what remains open. `--view-changed yes|no` records
-a change to an existing view; omit it when not applicable and explain in the note.
-Use `--integrated` only once you actually apply a change or adopt a decision.
+what the exchange contributed and what remains open; say in the note whether it
+changed your view. Use `--integrated` only once you actually apply a change or adopt
+a decision.
 Re-verifying preserves each record and its check logs. Records identify the turns
 and artifacts assessed; a later reply needs its own assessment. See `PROTOCOLS.md`
 for coverage, historical-record limits, and further examples.
@@ -196,9 +207,11 @@ permission for that disclosure.
 
 ## Gotchas
 
-- **A timeout can leave a recoverable session.** Reply to the same participant with
-  a short request to finish. Failed turns do not spend a round. The default turn
-  timeout is 30 minutes; use the recovery command in `next_steps` to raise it.
+- **A timeout can leave a finished answer or a recoverable session.** Read the
+  artifact first; `next_steps` says how much the peer wrote. If it is unfinished,
+  reply to the same participant with a short request to finish. Failed turns do
+  not spend a round. The default turn timeout is 30 minutes; use the recovery
+  command in `next_steps` to raise it.
 - **Usage-limit and auth failures do not heal on unchanged retries.** Report the
   cause and the stated reset time when available, or select another peer within
   the user's scope. Never present your own review as the missing peer's work.
