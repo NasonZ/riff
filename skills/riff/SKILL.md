@@ -15,6 +15,10 @@ responsibility for the conclusions and changes you bring back to the user. Drive
 and peer are coordination roles, not capability ranks; either can find the better
 framing.
 
+One habit runs through everything below: never claim more than you can show. Keep
+apart what the user said and what you read into it, what a peer checked and what
+it could not tell, and what you ran and what you only judged.
+
 The bundled coordinator handles processes, exact native sessions, artifacts,
 timeouts, and records. Use it for operations an adapter supports. Those records
 also support learning from real runs: preserve what was checked, what changed,
@@ -80,18 +84,29 @@ races”) rather than assigning a persona. Assess factual claims by their eviden
 and ideas by their reasoning and fit to the user's aims; confidence, model
 reputation, and agreement do not establish either.
 
-Resolve `RIFF_ROOT` to the directory containing this file. Load detail when needed:
+Resolve `RIFF_ROOT` to the directory containing this file. Load the section you
+need:
 
-- [references/PLAYBOOK.md](references/PLAYBOOK.md): choosing between exploration,
-  critique, and independent assessment; handling disagreement or a consequential
-  synthesis. The ordinary one-peer workflow is below.
-- [references/PROTOCOLS.md](references/PROTOCOLS.md): multi-turn discussions,
-  multiple participants, write delegation, or recording different kinds of outcome.
+- [references/PLAYBOOK.md](references/PLAYBOOK.md), for judgement:
+  [choosing the contribution](references/PLAYBOOK.md#choose-the-contribution),
+  [independent assessment](references/PLAYBOOK.md#independent-first-elicitation),
+  [disagreement](references/PLAYBOOK.md#framing-and-disagreement), and
+  [a consequential synthesis](references/PLAYBOOK.md#persuasion-and-synthesis). The
+  ordinary one-peer workflow is below.
+- [references/PROTOCOLS.md](references/PROTOCOLS.md), for procedure:
+  [multi-turn discussions](references/PROTOCOLS.md#discuss),
+  [several participants](references/PROTOCOLS.md#several-participants),
+  [delegation](references/PROTOCOLS.md#delegate),
+  [recording an outcome](references/PROTOCOLS.md#record-the-outcome), and
+  [failure and recovery](references/PROTOCOLS.md#failure-and-recovery).
 - [references/HARNESSES.md](references/HARNESSES.md): the relevant harness section
   when choosing adapter parameters, debugging, or recovering.
 - [references/DESIGN.md](references/DESIGN.md): changing Riff or working with its
-  traces and evaluation design.
-- [references/NOTES.md](references/NOTES.md): reusable design lessons.
+  traces and evaluation design. Its
+  [idea map](references/DESIGN.md#knowledge-architecture) shows where each rule's
+  reasons, mechanics and commands live.
+- [references/NOTES.md](references/NOTES.md): reusable design lessons and
+  [the research behind the rules](references/NOTES.md#research-and-limits).
 
 ## Run
 

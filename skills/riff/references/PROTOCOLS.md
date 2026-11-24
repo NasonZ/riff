@@ -3,7 +3,9 @@
 Read the relevant section before running a multi-turn discussion or a delegation.
 The coordinator handles sessions and artifacts; this file covers request shapes,
 continuation, recovery, and outcome records. For collaboration choices and their
-reasons, use [the playbook](PLAYBOOK.md).
+reasons, use [the playbook](PLAYBOOK.md). The records and refusals described here
+follow the habit set out in [the design](DESIGN.md#purpose-and-boundary): never
+claim more than you can show.
 
 ## Contents
 
@@ -250,35 +252,56 @@ result is supplied. It rejects an explicit `passed` that contradicts a failing
 command. `--integrated` is the driver's report of an applied change or adopted
 decision, not a synonym for receiving an answer.
 
-Each verification record identifies the latest successful participant turns and
-artifact hashes available when assessment starts. Re-verifying preserves the prior
-record and writes check logs in a separate directory, so a later command does not
-replace earlier evidence. Status compares this coverage with the latest turns: a
-passing record for an earlier artifact does not certify a new reply. A failed later
-attempt remains visible alongside any assessment of the earlier artifact. Older
-records without coverage information have unknown scope; check logs overwritten by
-older versions cannot be recovered from their recorded hashes.
+A record is bound to the answers it looked at. Each verification record
+identifies the latest successful participant turns and artifact hashes available
+when assessment starts, so a passing record for an earlier artifact does not
+certify a new reply. Re-verifying preserves the prior record and writes its check
+logs in a separate directory, so a later command does not replace earlier
+evidence. A failed later attempt stays visible alongside any assessment of the
+earlier artifact. The design explains
+[why a check covers only what it saw](DESIGN.md#a-check-covers-the-answers-it-saw-and-nothing-later).
 
-The returned `verification_scope` reports each participant as `unassessed`,
-`covered`, `uncovered`, `failed`, `running`, or `unknown`. `covered_turns`
-identifies any earlier successful artifact included in the current assessment,
-including after a failed attempt. That assessment may be `not_performed`; earlier
-check results remain in `verification_history`. The scope's `current` field says
-whether the assessment matches the latest attempts; it does not say that checks
-passed or that every participant succeeded. Recording a failure makes the assessment
-current without clearing that failure. A current `not_performed` record still means
-no checks were performed. A new run is unassessed with `current: false`;
-`current: null` indicates unknown scope, including incomplete assessment evidence
-and unreadable turn records.
+The returned `verification_scope` says where each participant stands. An attempt
+is one try at a turn; the design defines the
+[terms](DESIGN.md#state-and-observability) and draws
+[the same sequence as a timeline](DESIGN.md#a-check-covers-the-answers-it-saw-and-nothing-later).
+
+| Scope | The participant... |
+|---|---|
+| `unassessed` | succeeded on its latest attempt, and no verification is recorded yet |
+| `covered` | succeeded on its latest attempt, and the latest verification record covers that turn |
+| `uncovered` | succeeded on its latest attempt, and the latest verification record does not cover that turn |
+| `failed` | did not succeed or never ran: its latest attempt failed, its launcher is confirmed dead mid-turn, a failed pipeline stage blocked it, or it has not started |
+| `running` | has a turn in progress whose launcher is alive |
+| `unknown` | cannot be assessed: a turn record or its artifact is unreadable, nothing establishes whether the launcher of an unfinished attempt is alive, or the latest verification record carries no coverage |
+
+`covered_turns` identifies any earlier successful artifact included in the current
+assessment, including after a failed attempt. That assessment may be
+`not_performed`; earlier check results remain in `verification_history`.
+
+`current` says whether the assessment matches the latest attempts. It does not
+say that checks passed or that every participant succeeded:
+
+- a new run is unassessed, with `current: false`;
+- verifying after a failed attempt makes the assessment current without clearing
+  that failure;
+- a current `not_performed` record still means no checks were performed;
+- any later attempt invalidates currency, whether it is newly reserved, successful
+  or failed;
+- so does a reply that overlaps executed checks: the record stays tied to its
+  starting artifacts; and
+- `current: null` means the scope is unknown. That happens when any participant's
+  scope is `unknown`, and it includes incomplete assessment evidence, unreadable
+  turn records and verification records written before coverage was recorded.
 
 Start verification only once the run has settled. `not_performed` may acknowledge
 an interrupted run without claiming that an orphan child settled or that checks
-passed. A newly reserved, successful, or failed later attempt invalidates currency.
-If a reply overlaps executed checks, the record stays tied to its starting artifacts
-and its coverage is no longer current. This is not isolation of the working directory: another process
-can change files while a command runs. Review the relevant diff and environment
-as well as the exit code. Keep failures, corrections, and reasons for rejection:
-they are evidence for future evaluation as well as context for the current user.
+passed. A command run with `--run` is not isolated from the working directory:
+another process can change files while it runs, so review the relevant diff and
+environment as well as the exit code. Keep failures, corrections and reasons for
+rejection: they are evidence for future evaluation as well as context for the
+current user. Check logs overwritten by older versions of Riff cannot be
+recovered from their recorded hashes.
 
 ## Stopping
 
@@ -303,52 +326,51 @@ For exploration, do not force a consensus marker at all.
 
 ## Failure and recovery
 
-Surface participant failure without laundering it into overall success. A run may
-settle with partial results when at least one participant succeeds; the synthesis
-must name missing or failed perspectives.
+Three guarantees hold however a turn ends. They are the driver's view of the
+design's [state and observability](DESIGN.md#state-and-observability), which
+gives the reasons.
 
-Use explicit native session handles for follow-ups. Never select “the latest”
-session when two runs can coexist.
+**A failure is never reported as success.** A run where some peers failed and at
+least one succeeded reports `partial`; where none succeeded it reports `failed`.
+Name the missing or failed peers in your account, and never present your own
+review as theirs.
 
-If a process is interrupted:
+**A follow-up reaches the session you mean.** `reply` uses the participant's
+recorded session handle, never "the latest" session, so two runs cannot cross.
 
-1. Inspect `status` or `progress`; `wait` returns interrupted rather than waiting indefinitely.
-2. Preserve its artifact, log, and native session handle.
-3. Reply only after the owner is confirmed dead and either its attempt never passed
-   a recorded exec gate or its child process group is confirmed gone. Direct or
-   unspecified launch models cannot infer safety from a reservation alone.
-4. Use a short situational message in the exact native session. Unknown or live
-   children block reply; there is no automatic retry, orphan killing, or bypass.
-   Recovery of one pipeline participant does not launch queued participants.
+**An interrupted turn is resumed only on proof.** While a turn is unfinished,
+`reply` is refused until its launcher is confirmed dead and one of two things is
+true: the peer never passed
+[the start gate](DESIGN.md#on-posix-a-peer-process-is-on-record-before-it-runs),
+or its process group is confirmed gone. The design sets out
+[each case](DESIGN.md#an-interrupted-session-is-resumed-only-on-proof-that-its-process-has-gone-or-never-ran).
+Riff does not kill
+orphans or retry by itself, and there is no override. A process that left its
+recorded group is outside that proof.
 
-If an intended independent-first prompt accidentally included the driver's answer,
-start a fresh native session. A follow-up cannot undo the initial anchoring.
+| What happened | What to do |
+|---|---|
+| Timeout | A timeout is a failed turn, so it spends no round. Read the artifact first: if it is complete, treat it as the answer. If not, and its session survived, run the `reply` in `next_steps`; it asks for a concise final answer in the same session, with a longer bound. |
+| `rate_limit` or `auth` | Do not retry unchanged: it fails the same way (`RIF-FAILURE-001`). Report the stated reset or the credential problem, or choose another peer. |
+| Launcher died mid-turn (`interrupted`) | `wait` returns `interrupted` instead of hanging. Keep the turn's artifact, log and session handle. Check `status` or `progress` for the old peer's process group. Once it is confirmed gone, `reply` with a short note on what happened. While it is alive, check again later. If its state stays `unknown`, that participant cannot be resumed: start a new run. |
+| `reply` refused as busy or running | Another operation owns that participant. Wait for it. |
+| Your answer leaked into an independent first turn | Start a new run, which opens a fresh native session. A follow-up cannot undo the anchoring. |
+| Rounds used up | `reply --extend-rounds N`, or synthesise. |
 
-A timeout is a failed turn, not necessarily a lost answer or a lost session. A
-peer can time out after writing its artifact: read it first, and treat it as the
-answer if it is complete. Otherwise reply to the same participant asking for a
-concise final answer when its native session remains recoverable. Failed turns do not spend `max_rounds`, so recovery never
-costs the discussion a round; attempts are capped at twice the round budget. For Pi,
-`riff.py progress` shows whether the turn made progress before it timed out, and the
-native session file must exist before a reply can resume it.
+Limits:
 
-Classify a failure before retrying it (`RIF-FAILURE-001`). `rate_limit` and `auth`
-fail identically on an unchanged retry: report the stated reset or the credential
-problem, or choose another peer, and never present a self-review as the missing
-peer's. A `reply` to a participant whose turn is still running is refused; if the
-coordinator that launched it has died, the attempt is interrupted. Its child may
-still be running, so owner death alone never authorises resume. Same-participant
-operations fail fast as busy while another operation owns its lock.
-
-Recovery proofs are supported on Linux using PID, start ticks, boot ID, and PID
-namespace, including checks for living group members after leader exit. Strong
-observations require the same PID namespace and boot as the launcher. Zombies
-count as gone. Foreign namespaces, inaccessible or incomplete identities, and
-non-Linux recovery are unknown and block unsafe resume. The one-shot adapters
-preserve ordinary execution on other platforms using portable pipe streaming; Pi RPC remains POSIX-only. Alive-only hints allow ordinary
-waiting on non-Linux systems; they never establish that an interrupted owner or
-group has exited. Windows uses a safe handle query rather than signal-zero probing.
-Use bounded turn timeouts; Riff has no cross-process cancellation command. Status/result/progress/wait
-are read-only. Older and previously migrated run records are unsupported and left
-unchanged. Use the version that created those archives to inspect them, and start
-a new run for current work.
+- Failed turns do not spend a round, but attempts stop at twice the round budget,
+  so a broken peer cannot loop.
+- Proof that a process has gone exists on Linux only, within the launcher's boot
+  and PID namespace. From a different namespace (another container, for example)
+  or on another platform, an interrupted turn stays unknown however long you
+  wait.
+- A first Codex or Hermes turn that died before printing its session ID has no
+  session to resume.
+- Recovering one pipeline participant does not launch the queued ones.
+- For Pi, `progress` shows whether the turn made progress before it timed out,
+  and its session file must exist before a reply can resume it.
+- There is no cancel command; bound turns with timeouts. `status`, `progress` and
+  `wait` never change state.
+- Older and previously migrated run records are rejected and left untouched.
+  Inspect them with the version that wrote them.

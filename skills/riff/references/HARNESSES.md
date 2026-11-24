@@ -36,31 +36,43 @@ Every adapter must:
 - preserve the user's explicit model and reasoning controls without inventing a
   small fixed token budget.
 
-The three one-shot adapters use a threaded streaming backend for Windows anonymous
-pipes, which cannot be selected like POSIX descriptors. Early session publication
-is preserved. Windows launches the native executable directly and retains its
-actual process handle and exit status. Native exec gates and group cleanup apply
-on POSIX; group signals require an owned, still-unreaped new-session leader.
-Embedding hosts must not externally reap Riff-owned children. Detached Python
-workers consume their own release byte before claiming state on every platform.
-Linux provides recovery identity proofs within the launcher's PID namespace and
-boot. Other platforms provide alive-only hints; Windows never uses `os.kill` to
-probe a PID. Pi RPC remains POSIX-only.
+Process ownership, cleanup and recovery follow three of the coordinator's
+guarantees, which have one home in the design:
+[a peer is on record before it runs](DESIGN.md#on-posix-a-peer-process-is-on-record-before-it-runs),
+[an interrupted session is resumed only on proof](DESIGN.md#an-interrupted-session-is-resumed-only-on-proof-that-its-process-has-gone-or-never-ran),
+and [Riff signals only what it can prove it owns](DESIGN.md#riff-signals-only-what-it-can-prove-it-owns).
+In short: POSIX launches are gated and their process groups are cleaned up on
+failure; only Linux can prove a process gone, so only Linux recovers after a
+crash; Windows launches the native executable directly, keeping its real process
+handle, with neither gate nor recovery. The design tabulates
+[what holds on which platform](DESIGN.md#the-guarantees-are-strongest-on-linux).
+The points below are the ones an adapter author meets directly.
 
-Pipe capture has a bounded final drain. It records a log marker when descendants
-keep inherited pipes open beyond that limit. Successful Pi shutdown preserves
-background group members, but capture closure can break their later pipe writes.
+Early session publication is preserved. Detached Python workers consume their
+own release byte before claiming state, on every platform. Embedding hosts must
+not externally reap Riff-owned children. Pi RPC remains POSIX-only, while
+the three one-shot adapters use a threaded streaming backend on Windows, whose
+anonymous pipes cannot be selected like POSIX descriptors.
+
+Pipe capture has a bounded final drain of half a second. When descendants keep
+inherited pipes open beyond it, Riff writes a log marker and sets
+`adapter_metadata.output_truncated`. Successful Pi shutdown preserves background
+group members, but closing capture can break their later pipe writes. Cleanup
+metadata records whether signalling was attempted and whether group termination
+was owned or remains unproven; successful Pi results also report advisory
+descendant state.
+
 On the threaded backend, each reader or writer owns its descriptor until its OS
-call finishes. Shutdown requests stop, makes a bounded join, and leaves a pending
-daemon thread and handle intact until the holder unblocks it. The supervisor never
-closes a descriptor underneath a blocked OS call or waits indefinitely for it.
-`adapter_metadata.output_truncated` accompanies the log marker. Cleanup metadata
-records whether signalling was attempted and whether group termination was owned
-or remains unproven; successful Pi results also report advisory descendant state.
+call finishes. Shutdown requests a stop, makes a bounded join, and leaves a
+pending daemon thread and its handle intact until the holder unblocks it. The
+supervisor never closes a descriptor underneath a blocked OS call and never waits
+indefinitely for one.
 
 Report enforcement honestly. A native tool allowlist may enforce none/read, while
 a write toolset that includes a general shell still relies on the peer prompt for
-restrictions such as no commit, network call, or external side effect.
+restrictions such as no commit, network call, or external side effect. This is the
+adapter's share of the habit set out in
+[the design](DESIGN.md#purpose-and-boundary): never claim more than you can show.
 
 Adapters compile a shared participant specification into a native command or RPC
 exchange. Native options do not belong in `SKILL.md`.

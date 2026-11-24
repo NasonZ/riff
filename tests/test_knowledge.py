@@ -14,6 +14,24 @@ from tests import ROOT, SKILL_ROOT as SKILL
 RULE_ID = re.compile(r"RIF-[A-Z]+-\d{3}")
 DEFINITION = re.compile(r"^- `(RIF-[A-Z]+-\d{3})` \[([FRT])\]: ", re.MULTILINE)
 LOCAL_LINK = re.compile(r"\]\(((?!https?:)[^)#]+)(?:#[^)]*)?\)")
+ANCHOR_LINK = re.compile(r"\]\(((?!https?:)[^)#\s]*)#([^)\s]+)\)")
+HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+FENCED = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+
+
+def heading_anchors(path: Path) -> set[str]:
+    """The anchors GitHub gives a file's headings: lower case, punctuation dropped,
+    spaces to hyphens, a numeric suffix for a repeated heading."""
+    anchors: set[str] = set()
+    for heading in HEADING.findall(FENCED.sub("", path.read_text())):
+        text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+        slug = re.sub(r"[^\w\- ]", "", text.lower()).replace(" ", "-")
+        candidate, count = slug, 0
+        while candidate in anchors:
+            count += 1
+            candidate = f"{slug}-{count}"
+        anchors.add(candidate)
+    return anchors
 
 
 def knowledge_files() -> list[Path]:
@@ -70,6 +88,18 @@ class KnowledgeTests(unittest.TestCase):
         # The README is read on GitHub, where a moved file becomes a dead link.
         for link in LOCAL_LINK.findall((ROOT / "README.md").read_text()):
             self.assertTrue((ROOT / link).exists(), f"README.md links to missing {link}")
+
+    def test_section_links_resolve_to_a_heading(self) -> None:
+        # Sections are read one at a time, so the links between them are how an idea
+        # is followed across the repository. A reworded heading must not strand one.
+        documents = [SKILL / "SKILL.md", ROOT / "README.md", *sorted((SKILL / "references").glob("*.md"))]
+        broken = []
+        for document in documents:
+            for target, anchor in ANCHOR_LINK.findall(FENCED.sub("", document.read_text())):
+                path = (document.parent / target).resolve() if target else document
+                if not path.is_file() or anchor not in heading_anchors(path):
+                    broken.append(f"{document.relative_to(ROOT)} -> {target}#{anchor}")
+        self.assertEqual(broken, [], "links to a section that does not exist")
 
     def test_long_references_open_with_contents(self) -> None:
         for path in sorted((SKILL / "references").glob("*.md")):

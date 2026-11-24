@@ -51,8 +51,27 @@ available at the point where the driver needs to act. They are derived from the 
 itself rather than generic: a delegation asks for acceptance checks and an
 integration record, a consult quotes back each peer's stated limits and the user's
 words and asks for the claims checked, a failure names its recovery, and a run
-where no peer answered asks for an honest `not_performed`. An inspection or exploratory contribution needs a different
-record from an executable acceptance check.
+where no peer answered asks for an honest `not_performed`. An inspection or
+exploratory contribution needs a different record from an executable acceptance
+check.
+
+One habit runs through both halves: never claim more than you can show. The skill
+asks it of the agents, and the coordinator holds itself to it. It appears at four
+levels, and each keeps apart two things that are easy to merge:
+
+```text
+level         kept apart
+user          what they said            what the driver read into it
+peer          what it checked           what it could not tell
+driver        what it ran               what it only asserts
+coordinator   what the record proves    what is unknown
+```
+
+Most of the rules below are this habit applied at one level. `user_request` and the
+peer's closing limits serve the first two rows, the verification record the third,
+and the attempt history the fourth;
+[state and observability](#state-and-observability) takes the mechanics in turn.
+Wherever Riff could round an uncertainty up to a fact, it records the uncertainty.
 
 Adapters compile the common contract into native harness operations. Riff does not
 become another model provider registry, tool runtime, sandbox, or agent framework.
@@ -82,6 +101,16 @@ entrypoint        mode-specific
             ▼
  coordinator/adapters + focused tests
 ```
+
+The four levels of [purpose and boundary](#purpose-and-boundary) run across those
+documents. To follow one level through the repository, read along its row:
+
+| Level | The agent's rule | The reasons | The mechanics | The commands |
+|---|---|---|---|---|
+| User: what they said, what the driver read into it | [Prepare the context](../SKILL.md#prepare-the-context) | [What the exchange is for](PLAYBOOK.md#what-the-exchange-is-for), [conversation shape](NOTES.md#conversation-shape) | [The request and the handoff](#the-request-and-the-handoff-keep-the-users-words-and-the-peers-limits-in-view) | [Consult](PROTOCOLS.md#consult) |
+| Peer: what it checked, what it could not tell | [Assess, record, and respond](../SKILL.md#assess-record-and-respond) | [Persuasion and synthesis](PLAYBOOK.md#persuasion-and-synthesis), [handoffs](NOTES.md#handoffs-that-survive-lost-context) | [The request and the handoff](#the-request-and-the-handoff-keep-the-users-words-and-the-peers-limits-in-view) | [Common run contract](PROTOCOLS.md#common-run-contract) |
+| Driver: what it ran, what it only asserts | [Assess, record, and respond](../SKILL.md#assess-record-and-respond) | [Verification and integration](PLAYBOOK.md#verification-and-integration) | [A check covers the answers it saw](#a-check-covers-the-answers-it-saw-and-nothing-later) | [Record the outcome](PROTOCOLS.md#record-the-outcome) |
+| Coordinator: what the record proves, what is unknown | [Gotchas](../SKILL.md#gotchas) | [Recoverable sessions](NOTES.md#recoverable-sessions), [authority and observability](NOTES.md#authority-and-observability) | [State and observability](#state-and-observability) | [Failure and recovery](PROTOCOLS.md#failure-and-recovery), [shared invariants](HARNESSES.md#shared-invariants) |
 
 Promote a lesson according to what it changes: record publication-safe rationale
 in `NOTES.md`, explain durable judgment in `PLAYBOOK.md`, and put guidance needed on every run in
@@ -266,100 +295,337 @@ tool-free consultation, but must not claim repository-agent behaviour.
 
 ## State and observability
 
+This section gives the mechanics behind the table in
+[purpose and boundary](#purpose-and-boundary). Most of it is the coordinator's
+row: what the coordinator itself may say about a run. Riff reports what it
+observed, and where it could observe nothing it reports `unknown`. It does not
+round `unknown` up to `gone`, a finished-looking file up to a result, or a passing
+check up to a verdict on a later answer.
+
+Five guarantees follow, each with a subsection below:
+
+1. One record is the authority; every status is derived from it.
+2. On POSIX, a peer process is on record before it runs.
+3. An interrupted session is resumed only on proof that its process has gone or
+   never ran.
+4. Riff signals only what it can prove it owns.
+5. A check covers the answers it saw, and nothing later.
+
+The running example is the smallest run there is: Claude, the driver, starts one
+Codex peer called `codex-review`.
+
+Five terms recur. A *turn* is one prompt to one participant and the answer to it.
+An *attempt* is one try at a turn. A turn that completes without error is
+*settled*, and a run is settled once every participant has finished, successfully
+or not. A
+*round* is a settled turn counted against `max_rounds`. The *owner* of an attempt
+is the coordinator process that launched it; the protocols call it the launcher.
+
+### One record is the authority; every status is derived from it
+
 State defaults to `$XDG_STATE_HOME/riff` or `~/.local/state/riff`:
 
 ```text
 runs/<run-id>/
-├── run.json
+├── run.json                  the control record: the only authority
 ├── participants/<participant-id>/...native state...
-├── turns/<turn-id>.json
-├── artifacts/<turn-id>.md
-├── logs/<turn-id>.log
+├── turns/<turn-id>.json      evidence: what one turn returned
+├── artifacts/<turn-id>.md    evidence: the peer's answer
+├── logs/<turn-id>.log        evidence: raw process output
 ├── verification/<verification-id>/check-<number>.log
 └── launch/{request.json,stdout.log,stderr.log}  # detached runs
 ```
 
-Treat the state directory as private data, including artifacts, raw process logs,
-verification output, and native sessions. Detached runs retain their complete
-launch request in an owner-only `launch/request.json`. Credential-key redaction
-applies to arbitrary participant `params`, execution `usage`, and `adapter_metadata`
-dictionaries. Domain keys such as participant IDs and coverage maps are preserved.
-Redaction does not sanitise arbitrary prose, paths, command output, or transcripts. Prompt hashes
-in manifests do not make the other stored material anonymous or safe to publish.
+`run.json` (`schema_version: 2`) is the only file Riff writes as the authority on
+what happened. It holds the static coordination settings, each participant's
+specification and native session handle in order, an ordered list of attempts
+with their outcomes, how the initial dispatch and launch went, and the history of
+assessments. An *attempt* is one try at one turn: reserved before launch, running
+once its process is on record, finished once its outcome is committed.
 
-Riff restricts its `runs/`, launch-input, and `codex-home/` directories to their owner
-on POSIX systems when writing them. Public readers never create directories, change
-permissions, or acquire writable locks. This does not
-isolate peers running as that same user. Keep state outside source checkouts and
-shared or automatically synced directories; use the operating system's access
-controls where POSIX modes are not sufficient. The Codex home contains a filtered
-copy of local configuration and links to authentication and cache data.
+The record has no status field to go stale. Status, the aggregate result and the
+round counts are views: Riff derives them on every read, from that history and
+from what it can observe of the recorded processes and files at that moment. The
+turn file, log and artifact are *evidence exports*: Riff writes them first and commits
+the outcome to `run.json` second. A crash between the two leaves an interrupted
+attempt with a finished-looking file beside it, and that file alone never
+promotes the attempt to success.
 
-The coordinator has no telemetry or automatic record-upload service. Peer
-harnesses use their configured providers and can transmit task context or use
-network tools within their granted capabilities. Sharing or exporting records
-requires explicit selection, review, and permission from the data owner.
+Reading is safe at any time. `run.json` is replaced atomically, so `status` reads
+one whole document without locking or writing, and one captured snapshot feeds
+each response. The evidence a record refers to can disappear independently of it,
+and is then reported as `unknown`. Routine status trusts the recorded artifact hash and checks
+that the file is still there. It does not rehash the contents.
 
-`run.json` is the sole writable execution authority (`schema_version: 2`). It
-contains static coordination metadata, ordered participant specifications and native
-continuation handles, ordered attempt reservations/outcomes, initial dispatch and
-launch disposition, and assessment history. Status, aggregate results, and round
-counts are derived views rather than separately writable fields. Full launch
-requests stay in the private launch-input file; ordinary prompt records contain
-digests. Detailed terminal turn JSON, logs, and artifacts are evidence exports;
-a terminal file alone cannot promote an uncommitted attempt to success. Turn records store a prompt digest, artifact
-path and hash, native session handle, timing, usage, cost where the harness reports
-it, permission denials, the checkout fingerprint at settle, and error, together
-with the driver session and the turn's position in the native session file
-described under [learning from runs](#learning-from-runs). Comparing the
-two fingerprints can reveal a changed HEAD or dirty-file count, but cannot
-establish that file contents stayed unchanged while the peer was reading them.
+A turn record stores a prompt digest, the artifact path and hash, the native
+session handle, timing, usage, cost where the harness reports it, permission
+denials, the checkout fingerprint at settle, and any error, together with the
+driver session and the turn's position in the native session file described under
+[learning from runs](#learning-from-runs). Full launch requests stay in the
+private launch-input file; ordinary prompt records hold digests. The dispatch
+fingerprint is taken once, when the run is created, so a reply has none of its
+own start. Comparing the
+fingerprint taken at dispatch with the one taken at settle can reveal a changed
+HEAD or dirty-file count. It cannot show that file contents stayed unchanged
+while the peer was reading them.
 
-The coordinator emits records automatically. The driver only appends verification
-and integration truth; an empty, explicit `not_performed` is preferable to a
-fabricated successful check. Verification distinguishes two kinds of check. A
-`--run` command is executed by the coordinator, which records its exit code,
-duration, output hash, and output tail; with only executed checks the result is
-derived from exit codes, and a claimed `passed` that contradicts a failing command
-is rejected. A `--check` string is recorded as `asserted`: the driver's statement,
-honestly labelled, never presented as executed (`RIF-DELEGATE-002`).
+A result reports the operation and the run separately. `turn_result` and `ok`
+describe the operation just performed; `result` and `status` describe the whole
+run, including pending dispatch and newer replies. The two can differ even during the
+initial fan-out, if the driver replies to one participant while another's first
+turn is still running. A
+successful follow-up therefore cannot launder another participant's failure into
+overall success.
 
-Verification records have distinct identifiers and log directories. Their coverage
-binds the assessment to participant turns and artifact hashes observed before
-checks begin. Status derives currentness from the latest turns instead of storing
-a flag that a reply could invalidate silently. A later failed attempt does not
-erase evidence about an earlier artifact or inherit its passing result. A fresh
-assessment can acknowledge that failure and become current while the participant
-still shows as failed; the record is current without inventing success. Missing
-coverage or unreadable evidence leaves the assessment scope unknown.
+Rounds are counted from the same history. Only settled turns spend a
+participant's `max_rounds`; a failed turn being recovered does not, and attempts
+are capped at twice the budget so a broken peer cannot loop. Every durable
+reservation counts as an attempt towards that cap. Pipeline work blocked by a failed dependency is
+recorded as a dispatch disposition with its failure evidence, and consumes no
+launched attempt.
 
-The coordinator snapshots coverage under the run lock, executes commands without
-holding that lock, and compares the current state when recording. A reply during
-checks leaves the record tied to the starting snapshot. This protects attribution,
-not the working tree: checkout fingerprints are limited observations, and neither
-artifact hashes nor a passing command prove that files stayed unchanged. `status`
-reads one atomically replaced control document without locking or writing. One
-captured control snapshot feeds each response. Referenced evidence may disappear
-independently and is then reported as unknown. Routine status uses the recorded
-artifact hash and checks availability; it does not rehash current artifact contents.
-A newly reserved attempt invalidates assessment currency before it has a terminal
-file. Only `not_performed` may acknowledge an interrupted run with an unsettled
-child; passing checks cannot certify an active orphan.
+Only current run records with complete attempt history are supported. Older and
+previously migrated records are left untouched and rejected with an actionable
+error. Inspect those archives with the version that created them, and start a new
+run for current work. There is no automatic migration and no reconstruction of
+legacy counters.
 
-`validate` and `run` also return lint warnings for valid requests that tend to
-waste or bias a run: a delegation without acceptance criteria or out-of-scope
-items; persona wording; the driver's view inside a withheld task; a consult or
-discussion without the user's words in `user_request`; a task that needs the web
-given a scope without it; a context file a Claude peer cannot read; a write peer in
-a main checkout rather than a worktree; and fan-out beyond five participants.
-These heuristics warn rather than reject because each pattern has legitimate
-exceptions, and every message names its remedy. `driver_prediction`
-is stored in the manifest and never sent to a peer; it commits the driver to a
-view before reading the peer's, and the note records whether that view changed
-(`RIF-EPISTEMIC-003`). The field may instead state uncertainty;
-`driver_position: none` represents no prior position and does not require a
-prediction. A useful exploration with no checks can record `not_performed` and its
-contribution in `note`, without claiming verification.
+### On POSIX, a peer process is on record before it runs
+
+An *attempt* and its phases are defined under
+[the first guarantee](#one-record-is-the-authority-every-status-is-derived-from-it).
+Each harness's launch command is in [the harness notes](HARNESSES.md).
+
+This rules out one failure: Riff dies, and a peer it started is still working
+with nothing on disk to say which process it is.
+
+```text
+reserve    run.json gains attempt codex-review-001-3f2a9c1e, with    phase: reserved
+           Riff's own process as owner, the session handle if one
+           is known, and the paths the turn will write
+spawn      Codex is started behind a gate and cannot run yet
+record     the child's identity is written to the attempt            phase: running
+release    the gate opens and Codex starts work
+settle     Codex exits; Riff writes the turn file, then commits      phase: finished
+           the outcome to run.json
+```
+
+The gate is a small, constant Python program, run in isolated mode, that reads
+exactly one release byte and then replaces itself with the harness command. On
+end-of-file, or any other byte, it exits. Riff writes the byte only after the
+child's identity and its running state are committed. So a peer that is running
+is on record, and a peer that is not on record never ran.
+
+The guarantee stops at POSIX. On Windows Riff launches the harness directly with
+`Popen`, which keeps the real native process handle and exit status. That model
+has no gate, and so no guarantee before release: an unexpected failure while
+supervising or publishing a direct launch stays unproven even when no child
+identity reached the record. A normal
+failed completion can still be recorded as finished. Every attempt records its
+launch model before it spawns, because recovery depends on which one it was.
+
+One lifecycle serves first turns, pipeline stages and replies, under a
+per-participant ownership lock. A second operation on the same participant fails
+fast as busy. Locks are taken in a fixed order, the participant lock and then a
+short run-mutation lock, and neither peer execution nor a verification command
+ever holds the mutation lock.
+
+A reservation carries a unique attempt ID, an owner token, the owner's process
+identity, an evidence baseline, the known session handle and its assigned paths.
+Later observations and the terminal commit must present the same current attempt,
+the same token and an active phase. Evidence that arrives late stays attached to
+its own attempt and cannot overwrite another attempt or its native handle, and a
+terminal result with no handle keeps the handle already observed.
+
+Detached runs use the same handshake one level up, and on every platform.
+`run --detach` creates the control record before it spawns the worker and returns
+`starting`. The worker is a direct Python child with no gate program in front of
+it: it reads its own release byte, which Riff writes only after publishing the
+worker's identity, before any change to the record. It then validates its actual
+identity, its launch token and the digest of the request before it claims the
+initial dispatch. End-of-file before release
+can neither claim dispatch nor start a native turn, and a worker that is alive
+and published stays `starting` until it makes that claim. Public views of the
+manifest omit the token.
+
+To follow a run: `run` prints its run ID on stderr before it blocks, so the run
+is addressable from a second shell at once, and a caller that wants to choose the
+ID can preallocate it with `--run-id`. `wait` blocks for a bounded time, nine
+minutes by default, and returns the settled result, `starting` or `running`, or a
+truthful `interrupted` or `unknown`; a failed startup includes the captured
+stderr. Detaching exists because a child backgrounded by a driver's tool can die
+when the driver's session ends. Choose wait bounds within the calling harness's
+per-call limit.
+
+### An interrupted session is resumed only on proof that its process has gone or never ran
+
+The gate and the attempt phases come from
+[the previous guarantee](#on-posix-a-peer-process-is-on-record-before-it-runs).
+What a driver does after a crash is in
+[failure and recovery](PROTOCOLS.md#failure-and-recovery).
+
+Riff observes a recorded process as one of three things: `alive`, `gone` or
+`unknown`. `unknown` is an answer in its own right. It never counts as `gone`, and
+it never authorises a resume.
+
+Suppose Riff dies while `codex-review` is working. What `reply` may do next
+depends on how far the attempt had reached:
+
+```text
+Riff died...                  phase; owner as observed   reply is...
+before recording the child    reserved; gone             allowed, given a session handle:
+                                                         the gate never opened
+after recording the child     running; gone              refused until the peer's process
+                                                         group is proved gone
+after the turn file,          running; gone,             the same; the file is never
+before the commit             a turn file on disk        linked to the attempt, and the
+                                                         next reply records the attempt
+                                                         as interrupted
+Riff is alive, or its state   reserved or running;       refused: the turn may still
+cannot be established         alive or unknown           be running
+```
+
+Every `gone` in this table is a Linux observation; no other platform reports one.
+
+The phase is stored; the owner's state is observed each time the record is read.
+A reply also needs a known native session handle, and the example shows why that
+matters. Codex's thread ID is read from its output, so a first Codex turn that
+died before printing it has nothing to resume. The same holds for Hermes. Claude
+and Pi fix their session ID before launch. The shortcut in the first row, for a
+peer that was never released, exists only for gated launches: a direct or unspecified launch model needs
+positive proof that the child and its group exited, and a missing child identity
+stays unknown. Recovery records the interruption and reserves the next attempt in
+one atomic step. Riff offers no automatic restart, no orphan killing and no
+bypass, and queued pipeline work is never continued automatically after a crash.
+
+What counts as proof depends on the platform. On Linux a recovery identity includes
+the PID, its start ticks, the boot ID and the PID namespace, and a strong observation needs
+the same namespace and boot as the launcher. A recycled PID is therefore a
+different process, and a zombie counts as gone. A live member of the recorded
+process group blocks recovery even after its leader has exited. A foreign
+namespace, an inaccessible identity or a missing identity field means `unknown`,
+never `gone`. A process that deliberately leaves its recorded group is outside
+the proof.
+
+Other platforms give hints only, and their recorded identity is just a PID. A
+non-Linux POSIX system probes it with signal zero, and only for records that
+carry no Linux identity fields. Windows uses a
+safe process-handle query, never `os.kill(pid, 0)`. A hint can say `alive`, which
+is enough to keep waiting on a healthy run; absence or inaccessibility stays
+`unknown`. Hints never authorise recovery, so on those platforms a turn whose
+owner died stays `unknown` and that participant cannot be resumed.
+
+### Riff signals only what it can prove it owns
+
+The per-harness consequences are in
+[shared invariants](HARNESSES.md#shared-invariants).
+
+When a turn fails on POSIX, Riff cleans up the peer's process group, and it is
+strict about which group that is. Each peer starts as the leader of a new
+session. Riff signals that group only while the leader is still unreaped: an
+unreaped leader pins its group ID, so the number cannot have passed to another
+group. The sequence is TERM, a bounded grace period that does not reap, then
+KILL, all before the final wait. A zombie leader still pins its group, so the
+leader's exit alone never skips KILL on a failure path. Once a child has been
+reaped, its group ID never authorises a signal, whatever a `/proc` snapshot
+shows. Cleanup is idempotent, and cleanup that became uncertain after a reap
+stays unproven unless separate observations establish the exit.
+
+A host that embeds Riff must leave reaping to the `Popen` that owns each child:
+an external SIGCHLD handler or a `wait(-1)` reaper must not reap those children.
+Once something else has reaped a child, Riff can no longer prove the group is its
+own, so it sends no signal and the group's exit stays unproven.
+On Windows, timeout cleanup targets the real native process handle, with
+escalation, while cleanup of that process's descendants is unproven.
+
+Output capture is bounded on the same principle. After termination Riff drains
+the pipes for at most half a second and then closes them, and a log marker
+records any inherited pipe still open at that limit. Processes that escaped the
+group are not signalled; their later output is unavailable, and a background
+writer may meet a closed pipe. A Pi process that settles successfully gets an
+orderly shutdown period with its output drained concurrently, and once it exits
+successfully its background group members are preserved. The one-shot adapters
+likewise leave surviving descendants alone on a normal exit: they neither
+inspect nor signal them.
+
+### A check covers the answers it saw, and nothing later
+
+This is the driver's row of the table: what the driver ran, and what it only
+asserts. The driver's rule is in
+[SKILL.md](../SKILL.md#assess-record-and-respond), the reasons are in
+[verification and integration](PLAYBOOK.md#verification-and-integration), and the
+commands and their output fields are in
+[record the outcome](PROTOCOLS.md#record-the-outcome).
+
+The coordinator emits its records automatically. The driver adds only what it
+verified and what it integrated, and an empty, explicit `not_performed` is
+preferable to a fabricated successful check.
+
+Checks come in two kinds (`RIF-DELEGATE-002`). A `--run` command is executed by
+the coordinator, which records its exit code, duration, output hash and output
+tail. With only executed checks the result is derived from the exit codes, and a
+claimed `passed` that contradicts a failing command is rejected. A `--check`
+string is recorded as `asserted`: the driver's statement, honestly labelled and
+never presented as executed.
+
+Each verification record has its own identifier and log directory, and is bound
+to what it looked at: the participant turns and artifact hashes observed before
+the checks began. That binding is its *coverage*. Whether the record is *current*
+is derived from the latest attempts each time status is read. It is deliberately
+not a stored flag, which a later reply could invalidate silently.
+
+```text
+codex-review answers (turn 1)        unassessed    current: false
+the driver verifies                  covered       current: true
+the driver replies; turn 2 arrives   uncovered     current: false
+                                     the pass on turn 1 stands and says
+                                     nothing about turn 2
+the driver verifies again            covered       current: true
+```
+
+The timeline assumes that turn 2 succeeds and that nothing changes while the
+checks run. While turn 2 is running the scope reads `running`; if it fails,
+`failed`.
+
+A later failed attempt neither erases the evidence about an earlier artifact nor
+inherits its passing result. A fresh assessment can acknowledge that failure and
+become current while the participant still shows as failed; the record is then
+current without inventing success. Missing coverage or unreadable evidence leaves
+the assessment scope `unknown`.
+
+The procedure protects attribution. Riff snapshots coverage under the run lock,
+executes the commands without holding it, and compares the current state when it
+records. A reply during the checks leaves the record tied to its starting
+snapshot, and a newly reserved attempt invalidates currency before it has a
+terminal file. The working tree is another matter: checkout fingerprints are
+limited observations, and neither an artifact hash nor a passing command proves
+that files stayed unchanged.
+
+Verification needs a settled run, with one exception. Only `not_performed` may
+acknowledge an interrupted run with an unsettled child, or a run that failed to
+start; a passing check cannot certify an active orphan.
+
+### The request and the handoff keep the user's words and the peer's limits in view
+
+These are the user's and the peer's rows of the table. The driver's rules are in
+[SKILL.md](../SKILL.md#prepare-the-context), and the reasons are in
+[what the exchange is for](PLAYBOOK.md#what-the-exchange-is-for) and
+[persuasion and synthesis](PLAYBOOK.md#persuasion-and-synthesis).
+
+`validate` and `run` return
+lint warnings for valid requests that tend to waste or bias a run:
+
+- a delegation without acceptance criteria or out-of-scope items;
+- persona wording;
+- the driver's view inside a withheld task;
+- a consult or discussion without the user's words in `user_request`;
+- a task that needs the web given a scope without it;
+- a context file a Claude peer cannot read;
+- a write peer in a main checkout rather than a worktree; and
+- fan-out beyond five participants.
+
+These are heuristics, so they warn and do not reject: each pattern has legitimate
+exceptions, and every message names its remedy.
 
 The peer prompt places `user_request`, the user's words as the driver quoted them,
 above the driver's brief, and asks the peer to say where the brief departs from
@@ -369,108 +635,69 @@ section, or names its absence, and echoes the user's words, so both are in front
 of the driver as it writes to the user (`RIF-SYNTHESIS-001`); a follow-up in those
 modes asks for the section again. The manifest keeps `user_request` in clear, as it
 does `driver_prediction`, because `next_steps` quotes it; the task itself stays a
-digest. A turn that timed out after writing its artifact reports the bytes
-written, and the driver reads them before recovering the session. Only a timeout
-is treated this way: other failures can leave error text in the artifact.
+digest.
 
-An initial `run` returns both the aggregate run result and the result of the turns
-it just executed. These can differ even during initial fanout if a reply overlaps
-another initial participant. `turn_result` and `ok` describe the operation just
-performed; `result` and `status` describe the whole run, including pending dispatch
-and newer replies. A successful follow-up therefore cannot
-launder another participant's failure into overall success. Only settled turns
-spend a participant's `max_rounds`; a failed turn being recovered does not, and
-attempts are capped at twice the budget so a broken peer cannot loop. Every durable
-reservation counts as attempted. Dependency-blocked pipeline work is a dispatch
-disposition with failure evidence, and consumes no launched attempt.
+`driver_prediction` is stored in the manifest and never sent to a peer. It commits
+the driver to a view before it reads the peer's, and the verify note records
+whether that view changed (`RIF-EPISTEMIC-003`). The field may state uncertainty
+instead; `driver_position: none` represents no prior position and does not require
+a prediction. A useful exploration with no checks can record `not_performed` and
+its contribution in `note`, without claiming verification.
 
-For Pi, `progress` can inspect the RPC stream log and native JSONL while a turn is
-active. Its default view exposes operational metadata (event and update counts,
-block types, character counts, and tool names) without copying thinking or answer
-text into coordinator output. The RPC log supplies low-latency deltas; the session JSONL
-supplies durable continuation records and may lag until an assistant/tool boundary.
-Short content previews require an explicit flag. `run` prints its run ID on stderr
-before it blocks, so the run is addressable from a second shell at once; a
-preallocated `--run-id` remains available for callers that want to choose it.
-`run --detach` creates control state before spawning a gated coordinator and returns
-`starting`. The worker validates its launch token and process identity before
-claiming initial dispatch. A published living worker remains `starting` until that
-claim. `wait` blocks for a bounded time (nine minutes by default), returning the
-settled result, `starting`/`running`, or a truthful `interrupted`/`unknown` observation;
-a failed startup includes captured stderr. A child backgrounded by a driver's
-tool can otherwise die when the driver session ends. Choose wait bounds within
-the calling harness's per-call limit.
+A turn that timed out after writing its artifact reports the bytes written, and
+the driver reads them before recovering the session. The record still shows the
+turn as failed; treating the artifact as the answer is the driver's judgement.
+Only a timeout is treated this way: other failures can leave error text in the
+artifact.
 
-All initial, pipeline, and reply execution uses one attempt lifecycle under a
-participant ownership lock. Concurrent operations on the same participant fail
-fast as busy. Lock ordering is participant lock, then a short run mutation lock;
-execution and verification commands never hold the mutation lock. Reservations
-carry a unique attempt ID, owner token, owner process identity, evidence baseline,
-known session handle, and assigned paths. Observations and terminal commits require
-the same current attempt, token, and active phase. Late evidence remains attached
-to its own attempt and cannot overwrite another attempt or native handle. A null
-terminal handle preserves an already observed handle.
+### State stays local and private to its owner
 
-Every attempt records its launch model before spawning. Native POSIX commands use
-an isolated, constant Python exec trampoline that reads exactly one release byte
-and exits on EOF. Child identity and running disposition are committed before
-release. Native Windows commands use direct `Popen` so Riff retains the actual
-native process handle and exit status; that model has no pre-release guarantee.
-Unexpected direct-launch supervision or publication failures remain unproven even
-when no child identity reached control. A normal native failed completion can
-still be recorded as finished.
+What the records can and cannot be used for is under
+[learning from runs](#learning-from-runs); what a peer is allowed to do is under
+[authority](#authority).
 
-Detached coordinators use a direct Python child on all platforms. The internal
-worker reads its release byte before any control mutation, then validates its
-actual identity, claim token and request digest. EOF before release cannot claim
-dispatch or start a native turn. Public manifest views omit the internal claim
-token.
+Treat the state directory as private data, including artifacts, raw process logs,
+verification output and native sessions. Detached runs retain their complete
+launch request in an owner-only `launch/request.json`. Redaction replaces the
+values of credential-shaped keys in arbitrary participant `params`, execution
+`usage` and `adapter_metadata` dictionaries, and preserves domain keys such as
+participant IDs and coverage maps. It does not sanitise arbitrary prose, paths,
+command output or transcripts, and the prompt hashes in a manifest do not make
+the other stored material anonymous or safe to publish.
 
-POSIX failure cleanup signals only an owned new-session group whose leader is
-still unreaped. TERM, a bounded nonreaping grace period, and KILL all precede the
-final wait. A zombie leader still pins its group ID, so leader exit alone never
-skips KILL on a failure path. Already-reaped group IDs never authorise signals
-from a `/proc` snapshot. Cleanup is idempotent; uncertain post-reap cleanup stays
-unproven unless separate observations establish exit. Embedding hosts must leave
-Riff child reaping to its owning `Popen`: external SIGCHLD handlers or `wait(-1)`
-reapers must not reap those children. On Windows timeout cleanup targets the real
-native process handle, with escalation; descendant-group cleanup is unproven.
+On POSIX systems Riff restricts its `runs/`, launch-input and `codex-home/`
+directories to their owner when it writes them. Public readers never create
+directories, change permissions or acquire writable locks. None of this isolates
+peers running as that same user. Keep state outside source checkouts and shared
+or automatically synced directories, and use the operating system's access
+controls where POSIX modes are not sufficient. The Codex home contains a filtered
+copy of local configuration and links to authentication and cache data.
 
-After termination, pipe capture drains for at most half a second before closing;
-a log marker records any inherited pipe still open at that limit. Escaped
-processes are not signalled. Later output is unavailable, and background writers
-may encounter a closed pipe. A successfully settled Pi process gets an orderly
-shutdown period with concurrent output draining. Once it exits successfully, its
-background group members are preserved. Normal exits of the one-shot adapters
-also leave surviving descendants alone; they do not inspect or signal them.
+The coordinator has no telemetry and no automatic record-upload service. Peer
+harnesses use their configured providers and can transmit task context, or use
+network tools, within their granted capabilities. Sharing or exporting records
+requires explicit selection, review and permission from the data owner.
 
-Linux recovery identities include PID, start ticks, boot ID, and PID namespace.
-Strong observations require the same PID namespace and boot as the launcher.
-Recycled PIDs are distinct; zombies count as gone. A live member of the recorded
-process group blocks recovery even if its leader exited. Foreign namespaces,
-inaccessible identities, or missing identity fields mean unknown, never gone.
-Processes that deliberately leave the recorded process group are outside this
-proof. Other platforms have alive-only liveness hints for healthy execution;
-absence or inaccessibility remains unknown. Non-Linux POSIX hints use signal zero
-only for records without Linux identity metadata. Windows uses a safe process
-handle query, never `os.kill(pid, 0)`. These hints support ordinary waiting and
-never authorise recovery.
+### A live Pi turn can be watched without copying its text
 
-The three one-shot adapters use threaded streaming on Windows anonymous pipes.
-Pi RPC remains POSIX-only. Native Windows and macOS execution have not been
-validated by the Linux test suite. No automatic restart, orphan killing, or
-recovery bypass is offered. Only a recorded exec-gated reservation with a confirmed
-dead owner can use the never-released shortcut. Direct or unspecified launch
-models need positive child/group exit proof; missing child identity stays unknown.
-A running interrupted attempt likewise requires a confirmed dead owner, confirmed
-child/group exit, and a known native handle before reply. Recovery records
-interruption and reserves the next attempt atomically. Queued pipeline work is
-never automatically continued after a crash.
+For Pi, `progress` can inspect the RPC stream log and the native JSONL while a
+turn is active. Its default view exposes operational metadata (event and update
+counts, block types, character counts and tool names) and copies no thinking or
+answer text into coordinator output; short content previews require an explicit
+flag. The RPC log supplies low-latency deltas, while the session JSONL supplies
+durable continuation records and may lag until an assistant or tool boundary.
 
-Only current run records with complete attempt history are supported. Older and
-previously migrated records are left untouched and rejected with an actionable
-error. Inspect those archives with the version that created them; start a new run
-for current work. There is no automatic migration or legacy counter reconstruction.
+### The guarantees are strongest on Linux
+
+| Platform | Launch | Cleanup on failure | Recovery after a crash |
+|---|---|---|---|
+| Linux | behind the gate | the owned process group, while its leader is unreaped | on proof of exit, within the launcher's boot and PID namespace |
+| Other POSIX | behind the gate | the same | none: liveness hints only |
+| Windows | direct, keeping the real process handle and exit status | through that handle; descendants unproven | none: liveness hints only |
+
+The three one-shot adapters use threaded streaming on Windows anonymous pipes,
+and Pi RPC remains POSIX-only. Native Windows and macOS execution have not been
+validated by the Linux test suite.
 
 ## Authority
 

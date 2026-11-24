@@ -38,6 +38,9 @@ separate: a promising idea deserves development, while a factual claim needs
 evidence. Conversation can contribute to each stage, including the design of an
 experiment; agreement cannot substitute for its result.
 [Peirce, *Pragmatism: Instinct and Abduction*](https://www.textlog.de/7658.html).
+Riff's working rule, never claim more than you can show, is that separation
+applied at each level of an exchange; [the design](DESIGN.md#purpose-and-boundary)
+lists the levels.
 
 Perspective-taking is the practical discipline that follows: consider what the
 other participant has seen, which assumptions its answer depends on, and what

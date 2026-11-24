@@ -5,6 +5,12 @@ develop that contribution, and when the exchange has done enough. It covers earl
 exploration, disagreement, assessment, and delegation. Request shapes and commands
 live in `SKILL.md` and [the protocols](PROTOCOLS.md).
 
+Its sections share one habit with the rest of Riff: never claim more than you can
+show. [The design](DESIGN.md#purpose-and-boundary) sets out the four levels at
+which the habit applies, and its
+[idea map](DESIGN.md#knowledge-architecture) shows where each level's rule,
+mechanics and commands live.
+
 ## Contents
 
 - [What the exchange is for](#what-the-exchange-is-for)
