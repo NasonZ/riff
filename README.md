@@ -167,17 +167,17 @@ asked from its reading of it, and where competing readings would change the work
 says so rather than building one of them into every participant's brief. The gap a
 request leaves is the first place an exchange goes wrong. Across 20,574 coding-agent
 sessions, Tang et al. attributed about 15% of the identified misalignment episodes
-to underspecified instructions ([revised 31 August 2026](https://arxiv.org/html/2605.29442v2)).
+to underspecified instructions ([revised 31 August 2026](https://arxiv.org/html/2605.29442v2#:~:text=Instruction%20is%20ambiguous%2C%20underspecified%2C%20or%20inconsistent)).
 On Ambig-DS's prediction-target suite, tested frontier agents silently chose
 unintended targets in 39–63% of ambiguous runs
-([Stoisser et al., 10 May 2026](https://arxiv.org/html/2605.09698)). In both
+([Stoisser et al., 10 May 2026](https://arxiv.org/html/2605.09698#:~:text=The%20five%20frontier%20code%2Dbased%20agents%20we%20test,do%20not%20flag%20the%20ambiguity%20in%20any%20of%20them)). In both
 studies an agent that filled a gap seldom said so.
 
 **Brief from the sources.** The peer receives the goal, the constraints, its
 authority and the original material, not the driver's summary of them. In a
 controlled study, summaries passed between agents kept the facts but dropped the
 rules for using them, and a handoff that stated the rules explicitly was respected
-far better downstream ([Wang et al., Aug 2026](https://arxiv.org/abs/2608.29028)).
+far better downstream ([Wang et al., Aug 2026](https://arxiv.org/abs/2608.29028#:~:text=summaries%20preferentially%20preserve%20operational%20facts,how%20those%20facts%20may%20be%20used)).
 What else the brief carries depends on the contribution wanted. For a critique it
 carries the proposal; for a discussion, the aims and the idea to develop; for an
 independent assessment it leaves the driver's diagnosis out, because a peer that
@@ -187,7 +187,7 @@ expectation goes in the private record either way.
 **Choose the peer for the contribution.** A bounded task may suit a smaller or
 local model; a different assessment wants a different family. Rubric-based judges
 favour their own and their family's outputs
-([Pombal et al., revised 3 August 2026](https://arxiv.org/html/2604.06996v3)), so
+([Pombal et al., revised 3 August 2026](https://arxiv.org/html/2604.06996v3#:~:text=we%20show%20that%20SPB%20persists%20even%20when%20evaluation%20criteria%20are%20entirely%20objective,when%20the%20output%20is%20their%20own)), so
 another family removes that one bias. It does not make two readings independent:
 models trained on similar material share premises, which is why agreement is
 checked below rather than trusted.
@@ -206,7 +206,7 @@ evidence, an assumption, a priority or an error. Agreement counts for less than 
 appears to: on three natural-language
 inference datasets, nine judges from seven model families carried about two
 independent votes' worth of information
-([Kohli, 28 May 2026](https://arxiv.org/abs/2605.29800)). Models that share
+([Kohli, 28 May 2026](https://arxiv.org/abs/2605.29800#:~:text=we%20find%20that%20the%209%20judges%20effectively%20provide,worth%20of%20information)). Models that share
 premises reach the same conclusions, so agreement on anything that matters still
 gets checked.
 
@@ -216,10 +216,10 @@ its reasoning and its fit to the task, because a model can be moved by a confide
 argument whether or not it is right. A coherent argument for a wrong option flipped seven
 frontier models off correct answers in 17.5–97.3% of cases across 57 MMLU
 subjects, with no social pressure involved
-([*Who Flips?*, 14 June 2026](https://arxiv.org/abs/2606.16011)). Peer agreement
+([*Who Flips?*, 14 June 2026](https://arxiv.org/abs/2606.16011#:~:text=Across%20seven%20frontier%20models%20and%2057%20MMLU%20subjects,from%2017.5%25%20to%2097.3%25)). Peer agreement
 misleads an initially correct model more easily than it corrects a wrong one, and
 authority labels raise adoption whether or not the endorsed answer is right
-([*Easier to Mislead Than to Correct*, 1 June 2026](https://arxiv.org/abs/2606.01637)).
+([*Easier to Mislead Than to Correct*, 1 June 2026](https://arxiv.org/abs/2606.01637#:~:text=we%20find%20that%20peer%20agreement%20makes%20it%20much%20easier%20to%20mislead,regardless%20of%20whether%20it%20is%20correct)).
 
 **Return an account, and leave the decision with you.** The driver says what each
 participant contributed, what was checked, what remains uncertain and what is worth
@@ -228,16 +228,16 @@ puts the difference to you as a question.
 Karpathy's case for partial autonomy is to keep the work inspectable and let the
 person choose how much to hand over
 ([*Software Is Changing (Again)*, Jun 2025](https://www.youtube.com/watch?v=LCEmiRjPEtQ)),
-and his [LLM Council](https://github.com/karpathy/llm-council) inspired Riff's
+and his [LLM Council](https://github.com/karpathy/llm-council#readme) inspired Riff's
 separate answers and comparison. The same steering appears at larger scale:
 OpenAI's researchers redirected agent groups from intermediate findings during its
-Navier–Stokes work ([8 September 2026](https://openai.com/index/navier-stokes-solution/)).
+Navier–Stokes work ([8 September 2026](https://openai.com/index/navier-stokes-solution/#:~:text=Once%20we%20saw%20the%20Euler%20solution,intermediate%20results)).
 
 **What this evidence does not show.** These are instructions to the agents, not
 guarantees of their behaviour. None of the studies tests Riff, and none shows that
 Riff beats a strong single agent given the same evidence, tools and budget. In
 some debate settings majority voting accounts for most of the gain
-([*Debate or Vote?*, 2025](https://arxiv.org/abs/2508.17536)), so compare a riff
+([*Debate or Vote?*, 2025](https://arxiv.org/abs/2508.17536#:~:text=we%20find%20that%20Majority%20Voting%20alone%20accounts%20for%20most%20of%20the%20performance%20gains,typically%20attributed%20to%20MAD)), so compare a riff
 with simpler ways of spending the same budget; each extra session costs briefing,
 runtime and review. Whether an exchange revealed a useful possibility, corrected a
 consequential error or improved the eventual work remains a question for each run.

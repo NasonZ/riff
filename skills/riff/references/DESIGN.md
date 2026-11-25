@@ -140,7 +140,7 @@ context through that harness and provider; local record storage does not imply
 local-only inference.
 
 Skill optimisation and model post-training are distinct potential consumers.
-[SkillOpt](https://github.com/microsoft/SkillOpt) edits skill text using scored
+[SkillOpt](https://github.com/microsoft/SkillOpt#readme) edits skill text using scored
 trajectories while keeping model weights frozen, with a held-out validation gate
 for candidate changes. Curated demonstrations or preference examples could instead
 support model post-training. Riff currently supplies neither an optimiser

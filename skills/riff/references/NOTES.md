@@ -37,7 +37,7 @@ and testing it through experience. The distinction keeps invention and warrant
 separate: a promising idea deserves development, while a factual claim needs
 evidence. Conversation can contribute to each stage, including the design of an
 experiment; agreement cannot substitute for its result.
-[Peirce, *Pragmatism: Instinct and Abduction*](https://www.textlog.de/7658.html).
+[Peirce, *Pragmatism: Instinct and Abduction*](https://www.textlog.de/7658.html#:~:text=Abduction%20is%20the%20process%20of%20forming%20an%20explanatory%20hypothesis,introduces%20any%20new%20idea).
 Riff's working rule, never claim more than you can show, is that separation
 applied at each level of an exchange; [the design](DESIGN.md#purpose-and-boundary)
 lists the levels.
@@ -105,7 +105,7 @@ Preserve these distinctions rather than treating every settled turn as success.
 Preserve the conditions on the evidence too: which uses are authorised, what a
 check actually covers, and which conclusions remain provisional. A handoff that
 retains the facts but loses those conditions can change the meaning of the work.
-Wang et al.'s [handoff study](https://arxiv.org/html/2608.29028) tests one such
+Wang et al.'s [handoff study](https://arxiv.org/html/2608.29028#:~:text=summaries%20preferentially%20preserve%20operational%20facts,how%20those%20facts%20may%20be%20used) tests one such
 failure; its limits and single-agent comparison are discussed below.
 
 ## Recoverable sessions
@@ -154,19 +154,19 @@ interaction protocols matter; none establishes that a Riff discussion improves
 every task, or that the current skill outperforms a strong single-agent baseline.
 
 - **Collaborative thought.** Collins et al.,
-  [*Building Machines that Learn and Think with People*](https://arxiv.org/abs/2408.03943),
+  [*Building Machines that Learn and Think with People*](https://arxiv.org/abs/2408.03943#:~:text=We%20envision%20machines%20that%20are%20not%20just%20tools%20for%20thought,systems%20that%20think%20with%20us),
   develops a research agenda for partners that model the task, the world, and their
   collaborators. It covers planning and creation as well as answering questions.
   This motivates attention to mutual understanding; it is a perspective on
   human–AI collaboration, not an evaluation of Riff's cross-model exchanges.
 - **Perspective-taking.** Wilf et al.,
-  [*Think Twice*](https://aclanthology.org/2024.acl-long.451/), improves performance
+  [*Think Twice*](https://aclanthology.org/2024.acl-long.451/#:~:text=SimToM%20first%20filters%20context%20based%20on%20what%20the%20character%20in%20question%20knows), improves performance
   on theory-of-mind tasks by filtering information according to what a character
   knows. The relevant lesson is to keep perspectives and access to evidence
   distinct. Applying it to peer context is a design inference, not a result the
   paper tested.
 - **Interpreting the request.** Tang et al., [*How Coding Agents Fail Their
-  Users*](https://arxiv.org/html/2605.29442v2), revised 31 August 2026, analyses
+  Users*](https://arxiv.org/html/2605.29442v2#:~:text=Instruction%20is%20ambiguous%2C%20underspecified%2C%20or%20inconsistent), revised 31 August 2026, analyses
   20,574 sessions and attributes 15.36% of its identified misalignment episodes to
   underspecified instructions. Its unit is a breakdown visible through developer
   pushback, not every unnoticed failure; causes are annotated from logs, not
@@ -176,7 +176,7 @@ every task, or that the current skill outperforms a strong single-agent baseline
   peer turn. It does not establish a general failure rate or show that a second
   agent would have prevented those breakdowns.
 - **Execution can succeed under the wrong interpretation.** Stoisser et al.,
-  [*Ambig-DS*](https://arxiv.org/html/2605.09698), published 10 May 2026, removes
+  [*Ambig-DS*](https://arxiv.org/html/2605.09698#:~:text=The%20five%20frontier%20code%2Dbased%20agents%20we%20test,do%20not%20flag%20the%20ambiguity%20in%20any%20of%20them), published 10 May 2026, removes
   decisive framing information from data-science tasks. On its prediction-target
   suite, tested frontier agents silently commit to unintended targets in 39–63% of
   ambiguous runs, despite producing valid submissions. An idealised clarification
@@ -186,7 +186,7 @@ every task, or that the current skill outperforms a strong single-agent baseline
   constructs ambiguity around two framing variables; it neither estimates its
   prevalence in ordinary work nor tests realistic conversations with stakeholders.
 - **Handoffs must preserve conditions of use.** Wang et al., [*Facts Without
-  Rules*](https://arxiv.org/html/2608.29028), published August 2026, finds that
+  Rules*](https://arxiv.org/html/2608.29028#:~:text=summaries%20preferentially%20preserve%20operational%20facts,how%20those%20facts%20may%20be%20used), published August 2026, finds that
   compression can preserve operational facts while losing the audience and
   disclosure rules attached to them. In controlled downstream tests, explicit rules
   reduce leakage substantially compared with vague caution. A single agent given the
@@ -199,12 +199,12 @@ every task, or that the current skill outperforms a strong single-agent baseline
   audience allowlist, and inaccurate boundary extraction weakens it. Synthetic
   scenarios and simulated audiences limit claims about deployment.
 - **Potential gains from debate.** Du et al.,
-  [*Improving Factuality and Reasoning in Language Models through Multiagent Debate*](https://arxiv.org/abs/2305.14325),
+  [*Improving Factuality and Reasoning in Language Models through Multiagent Debate*](https://arxiv.org/abs/2305.14325#:~:text=Our%20findings%20indicate%20that%20this%20approach%20significantly%20enhances,contemporary%20models%20are%20prone%20to),
   reports improvements on its evaluated reasoning and factuality tasks. It
   provides evidence that exchanges can help under particular conditions, without
   establishing a general advantage for discussion or open-ended exploration.
 - **More reasoning is not enough.**
-  [*Debate or Vote?*](https://arxiv.org/abs/2508.17536) finds that majority voting
+  [*Debate or Vote?*](https://arxiv.org/abs/2508.17536#:~:text=we%20find%20that%20Majority%20Voting%20alone%20accounts%20for%20most%20of%20the%20performance%20gains,typically%20attributed%20to%20MAD) finds that majority voting
   accounts for most of the gain in its evaluated debate settings. Its theoretical
   result depends on a specified model of belief updates. The practical implication
   is to compare against simpler ways of spending the same budget, and investigate
@@ -216,9 +216,9 @@ every task, or that the current skill outperforms a strong single-agent baseline
   retrieve sources, inspect artifacts or run checks while they talk. The voting
   result above compares the first two. Studies that retrieve evidence during the
   debate report gains over standard debate: Jeong et al.,
-  [*Tool-MAD*](https://arxiv.org/abs/2601.04742), published 8 January 2026, on
+  [*Tool-MAD*](https://arxiv.org/abs/2601.04742#:~:text=Experimental%20results%20on%20four%20fact%20verification%20benchmarks,accuracy%20improvement), published 8 January 2026, on
   four fact-verification benchmarks, and Chowdhury et al.,
-  [*PROClaim*](https://arxiv.org/abs/2603.28488), published 30 March 2026, at
+  [*PROClaim*](https://arxiv.org/abs/2603.28488#:~:text=PROClaim%20achieves%2081.7%25%20accuracy,driving%20the%20primary%20performance%20gains), published 30 March 2026, at
   81.7% accuracy on Check-COVID, ten points above standard debate, with retrieval
   driving most of the gain. Both are read here from their abstracts, which report
   no comparison with a single agent given the same retrieval. For Riff the
@@ -227,7 +227,7 @@ every task, or that the current skill outperforms a strong single-agent baseline
   agreement cannot. Evidence is no oracle either: a document can be wrong, and a
   test can cover the wrong property.
 - **Different names do not ensure independent errors.** Kohli's [*Nine Judges, Two
-  Effective Votes*](https://arxiv.org/html/2605.29800) published 28 May 2026, tests
+  Effective Votes*](https://arxiv.org/html/2605.29800#:~:text=we%20find%20that%20the%209%20judges%20effectively%20provide,worth%20of%20information) published 28 May 2026, tests
   nine judges from seven families on three natural-language inference datasets and
   finds about two independent votes' worth of information. Its best single judge
   matches or outperforms the panel. Replication on a pairwise preference task
@@ -237,7 +237,7 @@ every task, or that the current skill outperforms a strong single-agent baseline
   reason to inspect contributions, not to assume a fixed discount for every
   collection of models.
 - **Judges can favour familiar outputs.** Pombal et al., [*Self-Preference Bias in
-  Rubric-Based Evaluation*](https://arxiv.org/html/2604.06996v3), revised 3 August
+  Rubric-Based Evaluation*](https://arxiv.org/html/2604.06996v3#:~:text=we%20show%20that%20SPB%20persists%20even%20when%20evaluation%20criteria%20are%20entirely%20objective,when%20the%20output%20is%20their%20own), revised 3 August
   2026, finds self- and family-preference even with programmatically verifiable
   rubrics on instruction-following and coding tasks; strength varies by model and
   dataset. Combining judges mitigates rather than eliminates the bias, and shared
@@ -245,34 +245,34 @@ every task, or that the current skill outperforms a strong single-agent baseline
   checking the underlying claim directly when possible. Rubric grading is not
   collaborative problem-solving: the result does not show that same-family peers
   always agree, or that choosing another family establishes independence.
-- **Persuasion can defeat judgment.** [*Who Flips?*](https://arxiv.org/abs/2606.16011),
+- **Persuasion can defeat judgment.** [*Who Flips?*](https://arxiv.org/abs/2606.16011#:~:text=Across%20seven%20frontier%20models%20and%2057%20MMLU%20subjects,from%2017.5%25%20to%2097.3%25),
   published 14 June 2026, challenges a correct multiple-choice answer with a coherent
   argument for a wrong option and finds flip rates of 17.5–97.3% across seven
   frontier models and 57 MMLU subjects, without overt social pressure;
   self-attributed arguments flip more. [*Easier to Mislead Than to
-  Correct*](https://arxiv.org/abs/2606.01637), published 1 June 2026, shows across
+  Correct*](https://arxiv.org/abs/2606.01637#:~:text=we%20find%20that%20peer%20agreement%20makes%20it%20much%20easier%20to%20mislead,regardless%20of%20whether%20it%20is%20correct), published 1 June 2026, shows across
   four open-weight models and seven QA datasets that simulated peer agreement
   misleads initially correct models more easily than it corrects wrong ones, that
   authority labels raise adoption regardless of correctness, and that chain-of-thought
   and reflection do not reliably prevent harmful revision; it recommends verifying
   peer answers rather than aggregating them. Both use multiple-choice QA, not
   open-ended collaboration.
-  [*MultiAgent Collaboration Attack*](https://arxiv.org/abs/2406.14711) and
+  [*MultiAgent Collaboration Attack*](https://arxiv.org/abs/2406.14711#:~:text=we%20evaluate%20the%20behavior%20of%20a%20network%20of%20models%20collaborating%20through%20debate,under%20the%20influence%20of%20an%20adversary) and
   [*When collaboration fails*](https://www.nature.com/articles/s41598-026-42705-7)
   study deliberately adversarial agents in debate; their attack settings do not
   measure the frequency of such failures in ordinary Riff use. Together these
   motivate assessing reasons and evidence rather than confidence or consensus.
 - **A persona is not a perspective.**
-  [*Persona is a Double-edged Sword*](https://arxiv.org/abs/2408.08631) finds that
+  [*Persona is a Double-edged Sword*](https://arxiv.org/abs/2408.08631#:~:text=inaccurately%20defined%20personas%20sometimes%20hinder%20LLMs,degrade%20their%20reasoning%20capabilities) finds that
   role-playing can help or harm reasoning under its tested conditions.
-  [*From Biased Chatbots to Biased Agents*](https://arxiv.org/abs/2602.12285)
+  [*From Biased Chatbots to Biased Agents*](https://arxiv.org/abs/2602.12285#:~:text=demographic%2Dbased%20persona%20assignments%20can%20alter,degrade%20performance%20across%20diverse%20domains)
   examines performance changes from task-irrelevant demographic role assignments.
   These findings motivate Riff's preference for concrete questions over invented
   identities; they do not show that every role instruction is harmful.
 
 Human direction can also develop the inquiry rather than only approve its final
 answer. In its [Navier–Stokes research
-account](https://openai.com/index/navier-stokes-solution/), published 8 September
+account](https://openai.com/index/navier-stokes-solution/#:~:text=Once%20we%20saw%20the%20Euler%20solution,intermediate%20results), published 8 September
 2026, OpenAI describes reallocating agents after an intermediate Euler result, then
 consolidating insights into follow-up prompts across groups. This illustrates
 steering from what the agents discover. It is an organisation's report of a large
